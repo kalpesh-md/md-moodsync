@@ -8,10 +8,10 @@ interface MoodColor {
 }
 
 const MOOD_COLORS: Record<string, MoodColor> = {
-  morning: { start: "#FFD93D", end: "#FFB347" }, // 5-8am
-  work: { start: "#7F77DD", end: "#534AB7" }, // 9-5pm
-  evening: { start: "#FF8C42", end: "#D85A30" }, // 6-9pm
-  night: { start: "#4A4A6A", end: "#2A2A4A" }, // 10pm-4am
+  morning: { start: "#EF9F27", end: "#F5C451" }, // 5-8am
+  work: { start: "#1E3A5F", end: "#378ADD" }, // 9-5pm
+  evening: { start: "#D85A30", end: "#EF9F27" }, // 6-9pm
+  night: { start: "#152A45", end: "#1E3A5F" }, // 10pm-4am
 };
 
 interface MoodClockProps {

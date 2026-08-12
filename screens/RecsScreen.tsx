@@ -1,6 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { Headphones, Loader2, ExternalLink } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface RecTrack {
   id: string;
@@ -45,77 +55,102 @@ export default function RecsScreen() {
     }
   };
 
-  const getEnergyIcon = (energy?: number) => {
-    if (!energy) return "🎵";
-    if (energy > 0.7) return "⚡ High Energy";
-    if (energy > 0.4) return "🌊 Medium Energy";
-    return "🍃 Low Energy";
+  const energyLabel = (energy?: number) => {
+    if (!energy) return "Track";
+    if (energy > 0.7) return "High energy";
+    if (energy > 0.4) return "Medium energy";
+    return "Low energy";
   };
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <p>Finding your perfect tracks...</p>
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin text-navy" />
+        <p className="text-sm">Finding your perfect tracks…</p>
       </div>
     );
   }
 
   return (
-    <div className="recs-modern">
-      <div className="recs-header">
-        <span className="recs-icon">🎧</span>
-        <h2>Recommended For You</h2>
-        <p>Based on your listening history</p>
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
+          Recommended For You
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Based on your listening history
+        </p>
       </div>
 
       {error && (
-        <div className="recs-error">
-          <span>⚠️</span>
-          <p>{error}</p>
-          <button onClick={fetchRecommendations} className="retry-btn">
-            Try Again
-          </button>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Couldn&apos;t load recs</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={fetchRecommendations}>Try again</Button>
+          </CardContent>
+        </Card>
       )}
 
       {!error && recommendations.length === 0 && (
-        <div className="recs-empty">
-          <span>🎵</span>
-          <h3>No recommendations yet</h3>
-          <p>Listen to some music on Spotify and come back!</p>
-        </div>
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-navy/10 text-navy">
+              <Headphones className="h-6 w-6" />
+            </div>
+            <CardTitle>No recommendations yet</CardTitle>
+            <CardDescription>
+              Listen to some music on Spotify and come back.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       )}
 
       {recommendations.length > 0 && (
-        <div className="recs-list">
+        <div className="space-y-3">
           {recommendations.slice(0, 10).map((track, idx) => (
-            <div key={track.id} className="rec-card">
-              <div className="rec-number">{idx + 1}</div>
-              {track.album?.images?.[0]?.url ? (
-                <img
-                  className="rec-artwork"
-                  src={track.album.images[0].url}
-                  alt={track.name}
-                />
-              ) : (
-                <div className="rec-artwork-placeholder">🎵</div>
-              )}
-              <div className="rec-info">
-                <div className="rec-title">{track.name}</div>
-                <div className="rec-artist">
-                  {track.artists?.map((a) => a.name).join(", ")}
+            <Card key={track.id} className="overflow-hidden">
+              <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+                <span className="w-6 text-center text-sm font-semibold text-muted-foreground">
+                  {idx + 1}
+                </span>
+                {track.album?.images?.[0]?.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className="h-14 w-14 rounded-lg object-cover"
+                    src={track.album.images[0].url}
+                    alt={track.name}
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-navy/10 text-navy">
+                    <Headphones className="h-5 w-5" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{track.name}</p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {track.artists?.map((a) => a.name).join(", ")}
+                  </p>
+                  <Badge variant="secondary" className="mt-1 font-normal">
+                    {energyLabel(track.energy)}
+                  </Badge>
                 </div>
-              </div>
-              <a
-                href={track.external_urls?.spotify}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rec-play"
-              >
-                ▶️
-              </a>
-            </div>
+                {track.external_urls?.spotify && (
+                  <Button variant="outline" size="icon" asChild>
+                    <a
+                      href={track.external_urls.spotify}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open in Spotify"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

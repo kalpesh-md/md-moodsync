@@ -39,8 +39,8 @@ export default function FriendMoodChart({ data }: FriendMoodChartProps) {
       {
         label: "Mood Score",
         data: data.map((item) => Number(item.avg_score)),
-        borderColor: "#7F77DD",
-        backgroundColor: "rgba(127,119,221,.25)",
+        borderColor: "#1E3A5F",
+        backgroundColor: "rgba(30,58,95,.18)",
         tension: 0.4,
         fill: true,
       },
