@@ -62,6 +62,68 @@ function jwtSecret() {
   return process.env.JWT_SECRET || process.env.MOODSYNC_SSO_SECRET;
 }
 
+/** Public site origin for OAuth redirects (avoids localhost env on Vercel). */
+function getPublicOrigin(req) {
+  const xfHost = req?.headers?.["x-forwarded-host"] || req?.headers?.host;
+  const xfProto = String(req?.headers?.["x-forwarded-proto"] || "https")
+    .split(",")[0]
+    .trim();
+  const host = xfHost ? String(xfHost).split(",")[0].trim() : "";
+  const isLocal =
+    !host || host.includes("localhost") || host.startsWith("127.0.0.1");
+
+  if (host && !isLocal) {
+    return `${xfProto}://${host}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`;
+  }
+  if (process.env.CLIENT_URL) {
+    return process.env.CLIENT_URL.replace(/\/$/, "");
+  }
+  return "http://localhost:3001";
+}
+
+function getSpotifyRedirectUri(req) {
+  const origin = getPublicOrigin(req);
+  const fromEnv = process.env.SPOTIFY_REDIRECT_URI;
+  if (fromEnv) {
+    try {
+      if (new URL(fromEnv).origin === origin) return fromEnv;
+      // Env still points at localhost while request is production — prefer request host
+      if (
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
+      ) {
+        return fromEnv;
+      }
+    } catch {
+      /* ignore bad env */
+    }
+  }
+  return `${origin}/api/spotify/callback`;
+}
+
+function getGoogleRedirectUri(req) {
+  const origin = getPublicOrigin(req);
+  const fromEnv =
+    process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_FIT_REDIRECT_URI;
+  if (fromEnv) {
+    try {
+      if (new URL(fromEnv).origin === origin) return fromEnv;
+      if (
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
+      ) {
+        return fromEnv;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return `${origin}/api/fit/callback`;
+}
+
 /** Map Title Case / mixed mood labels to lowercase mood_checkins enum. */
 function toMoodEnum(mood) {
   if (mood == null || mood === "") return mood;
@@ -197,18 +259,21 @@ app.get("/api/spotify/auth-url", authRequired, (req, res) => {
     "user-read-playback-state",
   ].join(" ");
 
+  const redirectUri = getSpotifyRedirectUri(req);
   const url =
     `https://accounts.spotify.com/authorize?` +
     `client_id=${process.env.SPOTIFY_CLIENT_ID}` +
-    `&response_type=code&redirect_uri=${process.env.SPOTIFY_REDIRECT_URI}` +
+    `&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=${encodeURIComponent(scopes)}&state=${req.user.userId}`;
 
-  res.json({ url });
+  res.json({ url, redirect_uri: redirectUri });
 });
 
 app.get("/api/spotify/callback", async (req, res) => {
   const { code, state: userId } = req.query;
   const db = getSupabaseAdmin();
+  const redirectUri = getSpotifyRedirectUri(req);
+  const clientOrigin = getPublicOrigin(req);
 
   const response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
@@ -223,7 +288,7 @@ app.get("/api/spotify/callback", async (req, res) => {
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+      redirect_uri: redirectUri,
     }),
   });
 
@@ -240,7 +305,7 @@ app.get("/api/spotify/callback", async (req, res) => {
     })
     .eq("user_id", userId);
 
-  res.redirect(`${process.env.CLIENT_URL}/?connected=spotify`);
+  res.redirect(`${clientOrigin}/?connected=spotify`);
 });
 
 app.get("/api/spotify/status", authRequired, async (req, res) => {
@@ -283,18 +348,21 @@ app.get("/api/fit/auth-url", authRequired, (req, res) => {
     "https://www.googleapis.com/auth/fitness.sleep.read",
   ].join(" ");
 
+  const redirectUri = getGoogleRedirectUri(req);
   const url =
     `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.GOOGLE_CLIENT_ID}&response_type=code` +
-    `&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&scope=${encodeURIComponent(scopes)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}` +
     `&access_type=offline&prompt=consent&state=${req.user.userId}`;
 
-  res.json({ url });
+  res.json({ url, redirect_uri: redirectUri });
 });
 
 app.get("/api/fit/callback", async (req, res) => {
   const { code, state: userId } = req.query;
   const db = getSupabaseAdmin();
+  const redirectUri = getGoogleRedirectUri(req);
+  const clientOrigin = getPublicOrigin(req);
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -303,7 +371,7 @@ app.get("/api/fit/callback", async (req, res) => {
       code: code,
       client_id: process.env.GOOGLE_CLIENT_ID,
       client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+      redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   });
@@ -321,7 +389,7 @@ app.get("/api/fit/callback", async (req, res) => {
     })
     .eq("user_id", userId);
 
-  res.redirect(`${process.env.CLIENT_URL}/?connected=googlefit`);
+  res.redirect(`${clientOrigin}/?connected=googlefit`);
 });
 
 // ============================================
