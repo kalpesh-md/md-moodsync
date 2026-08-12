@@ -91,6 +91,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Music2,
       label: "Now playing",
+      gradient: "from-violet-500 to-fuchsia-500",
       value: syncData?.track?.name
         ? `${syncData.track.name} · ${syncData.track.artist}${syncData.track.isRecent ? " (recent)" : ""}`
         : syncing
@@ -100,6 +101,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Heart,
       label: "Heart rate",
+      gradient: "from-rose-500 to-red-500",
       value: syncData?.fitData?.heartRate
         ? `${Math.round(syncData.fitData.heartRate)} bpm`
         : "No data",
@@ -107,6 +109,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Footprints,
       label: "Steps today",
+      gradient: "from-emerald-500 to-teal-500",
       value: syncData?.fitData?.steps
         ? `${syncData.fitData.steps.toLocaleString()} / 10,000`
         : "No data",
@@ -114,6 +117,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Moon,
       label: "Sleep last night",
+      gradient: "from-indigo-500 to-purple-500",
       value: syncData?.fitData?.sleepHours
         ? `${syncData.fitData.sleepHours}h`
         : "No data",
@@ -146,10 +150,13 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card>
+        <Card className="overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+                <Sparkles className="h-4 w-4" />
+              </span>
               Mood score
             </CardTitle>
             <CardDescription>
@@ -161,7 +168,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           <CardContent className="space-y-4">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <p className="text-5xl font-semibold tracking-tight tabular-nums">
+                <p className="bg-gradient-to-r from-navy via-blue-600 to-violet-600 bg-clip-text text-5xl font-bold tracking-tight tabular-nums text-transparent dark:from-blue-300 dark:via-violet-300 dark:to-fuchsia-300">
                   {moodScore}
                 </p>
                 <p className="text-sm text-muted-foreground">out of 100</p>
@@ -194,9 +201,9 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
               {DAYS.map((d, i) => (
                 <div
                   key={`${d}-${i}`}
-                  className={`flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-medium ${
+                  className={`flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-medium transition-all ${
                     checkins[i]
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm"
                       : "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -215,7 +222,9 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           return (
             <Card key={s.label} className="shadow-sm">
               <CardContent className="flex items-start gap-3 p-4">
-                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow-sm ${s.gradient}`}
+                >
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
@@ -233,7 +242,9 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Activity className="h-4 w-4" />
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-sm">
+              <Activity className="h-4 w-4" />
+            </span>
             Mood clock
           </CardTitle>
           <CardDescription>Your day mapped by mood periods</CardDescription>

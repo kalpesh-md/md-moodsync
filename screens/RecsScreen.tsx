@@ -73,13 +73,18 @@ export default function RecsScreen() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
-          Recommended For You
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Based on your listening history
-        </p>
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-md">
+          <Headphones className="h-5 w-5" />
+        </span>
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
+            Recommended For You
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Based on your listening history
+          </p>
+        </div>
       </div>
 
       {error && (

@@ -137,13 +137,18 @@ export default function InsightsScreen({ checkins: _checkins }: InsightsScreenPr
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
-          Personality Insights
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Based on your music and lifestyle patterns
-        </p>
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
+          <Brain className="h-5 w-5" />
+        </span>
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
+            Personality Insights
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Based on your music and lifestyle patterns
+          </p>
+        </div>
       </div>
 
       <Card className="border-navy/20 bg-gradient-to-br from-white to-[var(--ms-sky)] dark:from-slate-800 dark:to-slate-900">

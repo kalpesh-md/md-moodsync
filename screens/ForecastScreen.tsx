@@ -91,13 +91,18 @@ export default function ForecastScreen() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
-          Mood Forecast
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          AI-powered predictions based on your patterns
-        </p>
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md">
+          <CloudSun className="h-5 w-5" />
+        </span>
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
+            Mood Forecast
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            AI-powered predictions based on your patterns
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
