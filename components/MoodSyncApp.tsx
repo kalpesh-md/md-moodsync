@@ -141,9 +141,9 @@ export default function MoodSyncApp() {
         onCheckIn={() => setCheckInOpen(true)}
         onLogout={handleLogout}
       />
-      <div className="mx-auto flex w-full max-w-6xl flex-1">
+      <div className="flex w-full flex-1">
         <NavBar active={activeScreen} onChange={setActiveScreen} />
-        <main className="min-w-0 flex-1 px-4 py-5 pb-24 md:px-6 md:pb-6">
+        <main className="min-w-0 flex-1 px-4 py-5 pb-24 md:px-8 md:pb-8">
           {screens[activeScreen]}
         </main>
       </div>

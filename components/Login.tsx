@@ -1,6 +1,6 @@
 "use client";
 
-import { Headphones } from "lucide-react";
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -24,12 +24,14 @@ export default function Login(_props: LoginProps) {
       <Card className="relative z-10 w-full max-w-md overflow-hidden shadow-xl">
         <div className="h-1.5 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg">
-            <Headphones className="h-7 w-7" />
-          </div>
-          <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            MoodScale
-          </p>
+          <Image
+            src="/images/moodscale_logo1.png"
+            alt="MoodScale"
+            width={160}
+            height={40}
+            className="mx-auto h-9 w-auto"
+            priority
+          />
           <CardTitle className="bg-gradient-to-r from-navy via-blue-600 to-violet-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent dark:from-blue-300 dark:via-violet-300 dark:to-fuchsia-300">
             MoodSync
           </CardTitle>

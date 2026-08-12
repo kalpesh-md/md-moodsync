@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import {
   Activity,
-  Headphones,
+  ArrowLeft,
   LogOut,
   Moon,
   Music2,
@@ -26,6 +27,9 @@ interface TopBarProps {
 export default function TopBar({ onCheckIn, onLogout, user }: TopBarProps) {
   const [isDark, setIsDark] = useState(false);
 
+  const moodscaleUrl =
+    process.env.NEXT_PUBLIC_MOODSCALE_URL || "https://moodscale.in";
+
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     const dark = savedTheme === "dark";
@@ -46,19 +50,26 @@ export default function TopBar({ onCheckIn, onLogout, user }: TopBarProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+      <div className="flex w-full items-center gap-3 px-4 py-3 md:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-md">
-            <Headphones className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              MoodScale
-            </p>
-            <h1 className="truncate bg-gradient-to-r from-navy via-blue-600 to-violet-600 bg-clip-text text-lg font-bold tracking-tight text-transparent dark:from-blue-300 dark:via-violet-300 dark:to-fuchsia-300">
-              MoodSync
-            </h1>
-          </div>
+          <a
+            href={`${moodscaleUrl}/dashboard`}
+            className="flex shrink-0 items-center"
+            title="Back to MoodScale"
+          >
+            <Image
+              src="/images/moodscale_logo1.png"
+              alt="MoodScale"
+              width={120}
+              height={30}
+              className="h-7 w-auto"
+              priority
+            />
+          </a>
+          <Separator orientation="vertical" className="hidden h-6 sm:block" />
+          <h1 className="truncate bg-gradient-to-r from-navy via-blue-600 to-violet-600 bg-clip-text text-lg font-bold tracking-tight text-transparent dark:from-blue-300 dark:via-violet-300 dark:to-fuchsia-300">
+            MoodSync
+          </h1>
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
@@ -73,6 +84,17 @@ export default function TopBar({ onCheckIn, onLogout, user }: TopBarProps) {
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
 
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="gap-1.5 text-muted-foreground"
+          >
+            <a href={`${moodscaleUrl}/dashboard`}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Back to MoodScale</span>
+            </a>
+          </Button>
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
             {isDark ? <Sun /> : <Moon />}
           </Button>
