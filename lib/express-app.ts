@@ -137,7 +137,6 @@ function profileAsUser(row, email) {
     user_id: row.user_id,
     email: email ?? row.email ?? null,
     username: row.username,
-    avatar_url: row.avatar_url,
     share_mood: row.share_mood,
     share_trends: row.share_trends,
     share_ocean: row.share_ocean,
@@ -192,7 +191,7 @@ app.get("/api/auth/me", authRequired, async (req, res) => {
     const { data, error } = await db
       .from("moodsync_profiles")
       .select(
-        "user_id, username, avatar_url, share_mood, share_trends, share_ocean, share_music, share_fitness",
+        "user_id, username, share_mood, share_trends, share_ocean, share_music, share_fitness",
       )
       .eq("user_id", req.user.userId)
       .maybeSingle();
@@ -932,7 +931,7 @@ app.get("/api/friends/requests", authRequired, async (req, res) => {
 
     const { data: profiles, error: pErr } = await db
       .from("moodsync_profiles")
-      .select("user_id, username, avatar_url")
+      .select("user_id, username")
       .in("user_id", followerIds);
 
     if (pErr) throw pErr;
@@ -941,7 +940,6 @@ app.get("/api/friends/requests", authRequired, async (req, res) => {
       (profiles || []).map((u) => ({
         id: u.user_id,
         username: u.username,
-        avatar_url: u.avatar_url,
       })),
     );
   } catch (err) {
@@ -978,7 +976,7 @@ app.get("/api/users/search", authRequired, async (req, res) => {
 
     const { data: users, error } = await db
       .from("moodsync_profiles")
-      .select("user_id, username, avatar_url")
+      .select("user_id, username")
       .ilike("username", `%${q}%`)
       .neq("user_id", req.user.userId)
       .order("username")
@@ -990,7 +988,6 @@ app.get("/api/users/search", authRequired, async (req, res) => {
       (users || []).map((u) => ({
         id: u.user_id,
         username: u.username,
-        avatar_url: u.avatar_url,
       })),
     );
   } catch (err) {
@@ -1097,7 +1094,7 @@ app.get("/api/friends", authRequired, async (req, res) => {
 
   const { data: profiles } = await db
     .from("moodsync_profiles")
-    .select("user_id, username, avatar_url")
+    .select("user_id, username")
     .in("user_id", mutualIds);
 
   const result = [];
@@ -1113,7 +1110,6 @@ app.get("/api/friends", authRequired, async (req, res) => {
     result.push({
       id: u.user_id,
       username: u.username,
-      avatar_url: u.avatar_url,
       last_mood: lastCheckin?.mood_label ?? null,
     });
   }
