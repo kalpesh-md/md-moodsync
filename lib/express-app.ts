@@ -1,16 +1,17 @@
 /**
  * MoodSync Backend — Express API (mounted via App Router catch-all).
+ * Uses Supabase (service role) instead of pg Pool + bcrypt.
  */
 
-// @ts-nocheck — gradual typing; handlers keep runtime behavior.
+// @ts-nocheck
 
 import express from "express";
 import helmet from "helmet";
-import { Pool } from "pg";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import AWS from "aws-sdk";
+import { getSupabaseAdmin, getUserFromAccessToken } from "@/lib/supabase";
+import { ensureMoodSyncProfile } from "@/lib/profile";
 
 AWS.config.update({
   accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
@@ -22,7 +23,6 @@ const ses = new AWS.SES({ apiVersion: "2010-12-01" });
 
 const app = express();
 
-// Middleware
 app.use(express.json());
 app.get("/api/health", (req, res) => {
   res.json({
@@ -34,22 +34,12 @@ app.get("/api/health", (req, res) => {
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// Database & Cache connections
-const db = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
-// Simple in-memory cache for AI-generated content, keyed by userId.
-// Avoids re-calling Gemini on every tab visit. Resets on server restart.
 const forecastCache = new Map();
 const insightsCache = new Map();
 const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes
@@ -68,11 +58,37 @@ function setCached(cache, userId, data) {
   cache.set(userId, { data, timestamp: Date.now() });
 }
 
+function jwtSecret() {
+  return process.env.JWT_SECRET || process.env.MOODSYNC_SSO_SECRET;
+}
+
+/** Map Title Case / mixed mood labels to lowercase mood_checkins enum. */
+function toMoodEnum(mood) {
+  if (mood == null || mood === "") return mood;
+  return String(mood).trim().toLowerCase();
+}
+
+function profileAsUser(row, email) {
+  if (!row) return null;
+  return {
+    id: row.user_id,
+    user_id: row.user_id,
+    email: email ?? row.email ?? null,
+    username: row.username,
+    avatar_url: row.avatar_url,
+    share_mood: row.share_mood,
+    share_trends: row.share_trends,
+    share_ocean: row.share_ocean,
+    share_music: row.share_music,
+    share_fitness: row.share_fitness,
+  };
+}
+
 // ============================================
 // 2. AUTHENTICATION MIDDLEWARE
 // ============================================
 
-function authRequired(req, res, next) {
+async function authRequired(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
 
   if (!token) {
@@ -80,8 +96,24 @@ function authRequired(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    const supabaseUser = await getUserFromAccessToken(token);
+    if (supabaseUser) {
+      req.user = {
+        userId: supabaseUser.id,
+        email: supabaseUser.email ?? undefined,
+      };
+      return next();
+    }
+
+    const decoded = jwt.verify(token, jwtSecret());
+    const userId = decoded.userId || decoded.sub;
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    req.user = {
+      userId: String(userId),
+      email: decoded.email ?? undefined,
+    };
     next();
   } catch (err) {
     res.status(401).json({ error: "Invalid token" });
@@ -94,87 +126,62 @@ function authRequired(req, res, next) {
 
 app.get("/api/auth/me", authRequired, async (req, res) => {
   try {
-    const user = await db.query(
-      "SELECT id, email, username, share_mood, share_trends, share_ocean, share_music, share_fitness FROM users WHERE id = $1",
-      [req.user.userId],
-    );
-    res.json({ user: user.rows[0] });
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from("moodsync_profiles")
+      .select(
+        "user_id, username, avatar_url, share_mood, share_trends, share_ocean, share_music, share_fitness",
+      )
+      .eq("user_id", req.user.userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ user: profileAsUser(data, req.user.email) });
   } catch (err) {
+    console.error("auth/me error:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-app.post("/api/auth/register", async (req, res) => {
-  const { email, username, password } = req.body;
+app.post("/api/auth/sso", async (req, res) => {
+  const { token } = req.body || {};
 
-  if (!email || !username || !password) {
-    return res
-      .status(400)
-      .json({ error: "Email, username, and password are required" });
+  if (!token) {
+    return res.status(400).json({ error: "token is required" });
+  }
+
+  const ssoSecret = process.env.MOODSYNC_SSO_SECRET;
+  if (!ssoSecret) {
+    return res.status(500).json({ error: "SSO not configured" });
   }
 
   try {
-    const hash = await bcrypt.hash(password, 12);
-    const result = await db.query(
-      "INSERT INTO users (email, username, password_hash) VALUES ($1,$2,$3) RETURNING id",
-      [email, username, hash],
-    );
-    const token = jwt.sign(
-      { userId: result.rows[0].id },
-      process.env.JWT_SECRET,
+    const payload = jwt.verify(token, ssoSecret);
+    if (payload.aud !== "moodsync") {
+      return res.status(401).json({ error: "Invalid audience" });
+    }
+
+    const userId = payload.userId || payload.sub;
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid token payload" });
+    }
+
+    const email = payload.email ?? null;
+    const profile = await ensureMoodSyncProfile(String(userId), email);
+
+    const appToken = jwt.sign(
+      { userId: String(userId) },
+      jwtSecret(),
       { expiresIn: "7d" },
-    );
-    res.json({ token });
-  } catch (err) {
-    if (err.code === "23505") {
-      // Postgres unique_violation — email or username already taken
-      return res
-        .status(409)
-        .json({ error: "Email or username already in use" });
-    }
-    console.error("Register error:", err.message);
-    res.status(500).json({ error: "Registration failed. Please try again." });
-  }
-});
-
-app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
-
-  try {
-    const user = await db.query("SELECT * FROM users WHERE email=$1", [email]);
-
-    if (!user.rows[0]) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    const ok = await bcrypt.compare(password, user.rows[0].password_hash);
-    if (!ok) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    const token = jwt.sign(
-      { userId: user.rows[0].id },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      },
     );
 
     res.json({
-      token,
-      user: {
-        id: user.rows[0].id,
-        username: user.rows[0].username,
-        email: user.rows[0].email,
-      },
+      token: appToken,
+      user: profileAsUser(profile, email),
     });
   } catch (err) {
-    console.error("Login error:", err.message);
-    res.status(500).json({ error: "Login failed. Please try again." });
+    console.error("SSO error:", err.message);
+    res.status(401).json({ error: "Invalid SSO token" });
   }
 });
 
@@ -201,6 +208,7 @@ app.get("/api/spotify/auth-url", authRequired, (req, res) => {
 
 app.get("/api/spotify/callback", async (req, res) => {
   const { code, state: userId } = req.query;
+  const db = getSupabaseAdmin();
 
   const response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
@@ -221,25 +229,30 @@ app.get("/api/spotify/callback", async (req, res) => {
 
   const tokens = await response.json();
 
-  await db.query(
-    "UPDATE users SET spotify_access_token=$1, spotify_refresh_token=$2, spotify_token_expires=$3 WHERE id=$4",
-    [
-      tokens.access_token,
-      tokens.refresh_token,
-      new Date(Date.now() + tokens.expires_in * 1000),
-      userId,
-    ],
-  );
+  await db
+    .from("moodsync_profiles")
+    .update({
+      spotify_access_token: tokens.access_token,
+      spotify_refresh_token: tokens.refresh_token,
+      spotify_token_expires: new Date(
+        Date.now() + tokens.expires_in * 1000,
+      ).toISOString(),
+    })
+    .eq("user_id", userId);
 
   res.redirect(`${process.env.CLIENT_URL}/?connected=spotify`);
 });
 
 app.get("/api/spotify/status", authRequired, async (req, res) => {
   const userId = req.user.userId;
-  const user = (await db.query("SELECT * FROM users WHERE id=$1", [userId]))
-    .rows[0];
+  const db = getSupabaseAdmin();
+  const { data: user } = await db
+    .from("moodsync_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
 
-  if (!user.spotify_access_token) {
+  if (!user?.spotify_access_token) {
     return res.json({ connected: false, error: "No Spotify token" });
   }
 
@@ -281,6 +294,7 @@ app.get("/api/fit/auth-url", authRequired, (req, res) => {
 
 app.get("/api/fit/callback", async (req, res) => {
   const { code, state: userId } = req.query;
+  const db = getSupabaseAdmin();
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -296,19 +310,16 @@ app.get("/api/fit/callback", async (req, res) => {
 
   const tokens = await response.json();
 
-  await db.query(
-    `UPDATE users SET 
-      google_access_token = $1, 
-      google_refresh_token = $2, 
-      google_token_expires = $3 
-     WHERE id = $4`,
-    [
-      tokens.access_token,
-      tokens.refresh_token,
-      new Date(Date.now() + tokens.expires_in * 1000),
-      userId,
-    ],
-  );
+  await db
+    .from("moodsync_profiles")
+    .update({
+      google_access_token: tokens.access_token,
+      google_refresh_token: tokens.refresh_token,
+      google_token_expires: new Date(
+        Date.now() + tokens.expires_in * 1000,
+      ).toISOString(),
+    })
+    .eq("user_id", userId);
 
   res.redirect(`${process.env.CLIENT_URL}/?connected=googlefit`);
 });
@@ -319,12 +330,21 @@ app.get("/api/fit/callback", async (req, res) => {
 
 app.post("/api/mood/sync", authRequired, async (req, res) => {
   const userId = req.user.userId;
-  const user = (await db.query("SELECT * FROM users WHERE id=$1", [userId]))
-    .rows[0];
+  const db = getSupabaseAdmin();
 
-  // Refresh Spotify token if expired
+  const { data: user } = await db
+    .from("moodsync_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!user) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
   if (
-    (!user.spotify_token_expires || new Date() > user.spotify_token_expires) &&
+    (!user.spotify_token_expires ||
+      new Date() > new Date(user.spotify_token_expires)) &&
     user.spotify_refresh_token
   ) {
     try {
@@ -337,7 +357,6 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
     }
   }
 
-  // Fetch current playing or recently played track
   let nowPlaying = null;
 
   try {
@@ -364,7 +383,6 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
     // Silent fail
   }
 
-  // Fetch Google Fit data
   const now = Date.now();
   const startOfDay = new Date().setHours(0, 0, 0, 0);
   let fitData = { steps: 0, heartRate: null, sleepHours: null };
@@ -377,16 +395,16 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
     );
   }
 
-  // Fetch the user's most recent check-in (within the last 3 hours) —
-  // self-reported mood is our most reliable signal for the score.
-  const recentCheckin = (
-    await db.query(
-      `SELECT mood_label FROM checkins
-       WHERE user_id=$1 AND created_at >= NOW() - INTERVAL '3 hours'
-       ORDER BY created_at DESC LIMIT 1`,
-      [userId],
-    )
-  ).rows[0];
+  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  const { data: recentCheckins } = await db
+    .from("mood_checkins")
+    .select("mood_label")
+    .eq("user_id", userId)
+    .gte("created_at", threeHoursAgo)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const recentCheckin = recentCheckins?.[0];
 
   const moodScore = computeMoodScore({
     moodLabel: recentCheckin?.mood_label || null,
@@ -394,36 +412,34 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
     steps: fitData.steps,
   });
 
-  const lastSnapshot = (
-    await db.query(
-      "SELECT track_id, created_at FROM mood_snapshots WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",
-      [userId],
-    )
-  ).rows[0];
+  const { data: lastSnapshots } = await db
+    .from("mood_snapshots")
+    .select("track_id, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const lastSnapshot = lastSnapshots?.[0];
 
   const sameTrack = lastSnapshot?.track_id === (nowPlaying?.item?.id || null);
   const secondsSinceLast = lastSnapshot
     ? (Date.now() - new Date(lastSnapshot.created_at).getTime()) / 1000
     : Infinity;
 
-  const shouldSkipInsert = sameTrack && secondsSinceLast < 300; // same song, <5 min ago
+  const shouldSkipInsert = sameTrack && secondsSinceLast < 300;
 
   if (!shouldSkipInsert) {
-    await db.query(
-      `INSERT INTO mood_snapshots 
-      (user_id, score, valence, energy, steps, heart_rate, sleep_hours, track_id, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
-      [
-        userId,
-        moodScore,
-        null,
-        null,
-        fitData.steps,
-        fitData.heartRate,
-        fitData.sleepHours,
-        nowPlaying?.item?.id || null,
-      ],
-    );
+    await db.from("mood_snapshots").insert({
+      user_id: userId,
+      score: moodScore,
+      valence: null,
+      energy: null,
+      steps: fitData.steps,
+      heart_rate: fitData.heartRate,
+      sleep_hours: fitData.sleepHours,
+      track_id: nowPlaying?.item?.id || null,
+      created_at: new Date().toISOString(),
+    });
   }
 
   res.json({
@@ -438,21 +454,25 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
 
 app.get("/api/mood/snapshots", authRequired, async (req, res) => {
   const userId = req.user.userId;
-  const snapshots = await db.query(
-    `SELECT * FROM mood_snapshots WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
-    [userId],
-  );
-  const latest = await db.query(
-    `SELECT *
-    FROM mood_snapshots
-    WHERE user_id=$1
-    ORDER BY created_at DESC
-    LIMIT 1`,
-    [userId],
-  );
+  const db = getSupabaseAdmin();
+
+  const { data: snapshots } = await db
+    .from("mood_snapshots")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  const { data: latest } = await db
+    .from("mood_snapshots")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
   console.log("Latest snapshot:");
-  console.log(latest.rows[0]);
-  res.json({ snapshots: snapshots.rows });
+  console.log(latest?.[0]);
+  res.json({ snapshots: snapshots || [] });
 });
 
 // ============================================
@@ -461,62 +481,102 @@ app.get("/api/mood/snapshots", authRequired, async (req, res) => {
 
 app.post("/api/checkins", authRequired, async (req, res) => {
   const { mood, note, shareWithFriends } = req.body;
+  const db = getSupabaseAdmin();
 
   try {
-    const result = await db.query(
-      `INSERT INTO checkins (user_id, mood_label, note, share_with_friends)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [req.user.userId, mood, note, shareWithFriends],
-    );
-    res.json({ checkin: result.rows[0] });
+    const { data, error } = await db
+      .from("mood_checkins")
+      .insert({
+        user_id: req.user.userId,
+        mood_label: toMoodEnum(mood),
+        note,
+        share_with_friends: shareWithFriends,
+      })
+      .select("*")
+      .single();
+
+    if (error) throw error;
+    res.json({ checkin: data });
   } catch (err) {
+    console.error("checkin save error:", err.message);
     res.status(500).json({ error: "Failed to save checkin" });
   }
 });
 
 app.get("/api/checkins", authRequired, async (req, res) => {
+  const db = getSupabaseAdmin();
   try {
-    const result = await db.query(
-      `SELECT * FROM checkins WHERE user_id = $1 ORDER BY created_at DESC`,
-      [req.user.userId],
-    );
-    res.json({ checkins: result.rows });
+    const { data, error } = await db
+      .from("mood_checkins")
+      .select("*")
+      .eq("user_id", req.user.userId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json({ checkins: data || [] });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch checkins" });
   }
 });
 
 app.get("/api/checkins/latest", authRequired, async (req, res) => {
+  const db = getSupabaseAdmin();
   try {
-    const result = await db.query(
-      `SELECT * FROM checkins WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
-      [req.user.userId],
-    );
-    res.json({ checkin: result.rows[0] || null });
+    const { data, error } = await db
+      .from("mood_checkins")
+      .select("*")
+      .eq("user_id", req.user.userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ checkin: data || null });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch latest checkin" });
   }
 });
 
 app.get("/api/checkins/week", authRequired, async (req, res) => {
-  const rows = await db.query(
-    `SELECT DATE(created_at) as day, mood_label FROM checkins
-     WHERE user_id=$1 AND created_at >= NOW() - INTERVAL '7 days'
-     ORDER BY created_at DESC`,
-    [req.user.userId],
-  );
-  res.json(rows.rows);
+  const db = getSupabaseAdmin();
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data } = await db
+    .from("mood_checkins")
+    .select("created_at, mood_label")
+    .eq("user_id", req.user.userId)
+    .gte("created_at", weekAgo)
+    .order("created_at", { ascending: false });
+
+  const rows = (data || []).map((r) => ({
+    day: r.created_at?.slice(0, 10),
+    mood_label: r.mood_label,
+  }));
+
+  res.json(rows);
 });
 
 app.get("/api/checkins/analytics", authRequired, async (req, res) => {
+  const db = getSupabaseAdmin();
   try {
-    const result = await db.query(
-      `SELECT mood_label, COUNT(*) as count
-       FROM checkins WHERE user_id = $1 GROUP BY mood_label`,
-      [req.user.userId],
-    );
-    res.json({ stats: result.rows });
+    const { data, error } = await db
+      .from("mood_checkins")
+      .select("mood_label")
+      .eq("user_id", req.user.userId);
+
+    if (error) throw error;
+
+    const counts = {};
+    for (const row of data || []) {
+      const label = row.mood_label;
+      counts[label] = (counts[label] || 0) + 1;
+    }
+    const stats = Object.entries(counts).map(([mood_label, count]) => ({
+      mood_label,
+      count,
+    }));
+
+    res.json({ stats });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch analytics" });
   }
@@ -535,16 +595,23 @@ app.get("/api/forecast", authRequired, async (req, res) => {
   }
 
   try {
-    const snapshots = await db.query(
-      `SELECT * FROM mood_snapshots WHERE user_id=$1 AND created_at >= NOW() - INTERVAL '7 days' ORDER BY created_at`,
-      [userId],
-    );
-    const checkins = await db.query(
-      `SELECT * FROM checkins WHERE user_id=$1 AND created_at >= NOW() - INTERVAL '7 days' ORDER BY created_at`,
-      [userId],
-    );
+    const db = getSupabaseAdmin();
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Return mock forecast if no AI key or AI fails
+    const { data: snapshots } = await db
+      .from("mood_snapshots")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("created_at", weekAgo)
+      .order("created_at", { ascending: true });
+
+    const { data: checkins } = await db
+      .from("mood_checkins")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("created_at", weekAgo)
+      .order("created_at", { ascending: true });
+
     const mockForecast = [
       {
         timeLabel: "Next 2 hours",
@@ -572,7 +639,6 @@ app.get("/api/forecast", authRequired, async (req, res) => {
       },
     ];
 
-    // Try AI, but return mock if it fails
     if (
       process.env.GEMINI_API_KEY &&
       process.env.GEMINI_API_KEY !== "your_gemini_key"
@@ -592,16 +658,16 @@ app.get("/api/forecast", authRequired, async (req, res) => {
         ${systemPrompt}
 
         Mood snapshots:
-        ${JSON.stringify(snapshots.rows.slice(-20), null, 2)}
+        ${JSON.stringify((snapshots || []).slice(-20), null, 2)}
 
         Check-ins:
-        ${JSON.stringify(checkins.rows, null, 2)}
+        ${JSON.stringify(checkins || [], null, 2)}
 
         Current time:
         ${new Date().toISOString()}
         `;
 
-       const response = await generateWithRetry(prompt);
+        const response = await generateWithRetry(prompt);
 
         const text = response.text();
 
@@ -615,11 +681,9 @@ app.get("/api/forecast", authRequired, async (req, res) => {
       }
     }
 
-    // Return mock forecast
     res.json(mockForecast);
   } catch (err) {
     console.log("Forecast error:", err.message);
-    // Return mock forecast on error
     res.json([
       {
         timeLabel: "Next 2 hours",
@@ -658,14 +722,21 @@ app.get("/api/insights/personality", authRequired, async (req, res) => {
     return res.json(cached);
   }
 
-  const snapshots = await db.query(
-    "SELECT * FROM mood_snapshots WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100",
-    [userId],
-  );
-  const checkins = await db.query(
-    "SELECT * FROM checkins WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
-    [userId],
-  );
+  const db = getSupabaseAdmin();
+
+  const { data: snapshots } = await db
+    .from("mood_snapshots")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  const { data: checkins } = await db
+    .from("mood_checkins")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   const systemPrompt = `You are a psychometric inference engine. Based on a user's music audio features, fitness patterns, and self-reported moods, estimate:
 1. Big Five OCEAN scores (0-100 each)
@@ -681,13 +752,13 @@ Return only JSON: { ocean: {O,C,E,A,N}, mbti: {type, confidence, axes: {IE, NS, 
     ${systemPrompt}
 
     Audio feature averages:
-    ${JSON.stringify(aggregateFeatures(snapshots.rows), null, 2)}
+    ${JSON.stringify(aggregateFeatures(snapshots || []), null, 2)}
 
     Mood distribution:
-    ${JSON.stringify(moodDistribution(checkins.rows), null, 2)}
+    ${JSON.stringify(moodDistribution(checkins || []), null, 2)}
 
     Fitness patterns:
-    ${JSON.stringify(fitnessPatterns(snapshots.rows), null, 2)}
+    ${JSON.stringify(fitnessPatterns(snapshots || []), null, 2)}
     `;
 
     const response = await generateWithRetry(prompt);
@@ -717,17 +788,19 @@ Return only JSON: { ocean: {O,C,E,A,N}, mbti: {type, confidence, axes: {IE, NS, 
 
 app.get("/api/recs", authRequired, async (req, res) => {
   const userId = req.user.userId;
-  const user = (await db.query("SELECT * FROM users WHERE id=$1", [userId]))
-    .rows[0];
+  const db = getSupabaseAdmin();
 
-  if (!user.spotify_access_token) {
+  const { data: user } = await db
+    .from("moodsync_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!user?.spotify_access_token) {
     return res.json({ recommendations: [], error: "Spotify not connected" });
   }
 
   try {
-    // Spotify deprecated /v1/recommendations and /v1/audio-features for
-    // apps without Extended Quota Mode (Nov 2024). We build recs from
-    // top tracks + recently played instead, which are still available.
     let topTracks = { items: [] };
     const topRes = await fetch(
       "https://api.spotify.com/v1/me/top/tracks?limit=20&time_range=short_term",
@@ -742,7 +815,6 @@ app.get("/api/recs", authRequired, async (req, res) => {
     );
     if (recentRes.ok) recentTracks = await recentRes.json();
 
-    // Merge top tracks + recently played, dedupe by track id
     const combined = [
       ...(topTracks.items || []),
       ...(recentTracks.items?.map((i) => i.track) || []),
@@ -761,7 +833,6 @@ app.get("/api/recs", authRequired, async (req, res) => {
       });
     }
 
-    // Shuffle so it doesn't look identical every time, cap at 12
     const shuffled = deduped.sort(() => Math.random() - 0.5).slice(0, 12);
 
     res.json({ recommendations: shuffled });
@@ -777,23 +848,34 @@ app.get("/api/recs", authRequired, async (req, res) => {
 
 app.get("/api/friends/requests", authRequired, async (req, res) => {
   try {
-    const requests = await db.query(
-      `
-      SELECT
-        u.id,
-        u.username,
-        u.avatar_url
-      FROM follows f
-      JOIN users u
-        ON u.id = f.follower_id
-      WHERE
-        f.following_id = $1
-        AND f.status = 'pending'
-      `,
-      [req.user.userId],
-    );
+    const db = getSupabaseAdmin();
+    const { data: follows, error } = await db
+      .from("mood_follows")
+      .select("follower_id")
+      .eq("following_id", req.user.userId)
+      .eq("status", "pending");
 
-    res.json(requests.rows);
+    if (error) throw error;
+
+    const followerIds = (follows || []).map((f) => f.follower_id);
+    if (followerIds.length === 0) {
+      return res.json([]);
+    }
+
+    const { data: profiles, error: pErr } = await db
+      .from("moodsync_profiles")
+      .select("user_id, username, avatar_url")
+      .in("user_id", followerIds);
+
+    if (pErr) throw pErr;
+
+    res.json(
+      (profiles || []).map((u) => ({
+        id: u.user_id,
+        username: u.username,
+        avatar_url: u.avatar_url,
+      })),
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch friend requests" });
@@ -805,13 +887,13 @@ app.delete(
   authRequired,
   async (req, res) => {
     try {
-      await db.query(
-        `DELETE FROM follows
-       WHERE follower_id = $1
-       AND following_id = $2
-       AND status = 'pending'`,
-        [req.params.followerId, req.user.userId],
-      );
+      const db = getSupabaseAdmin();
+      await db
+        .from("mood_follows")
+        .delete()
+        .eq("follower_id", req.params.followerId)
+        .eq("following_id", req.user.userId)
+        .eq("status", "pending");
 
       res.json({ deleted: true });
     } catch (err) {
@@ -824,24 +906,25 @@ app.delete(
 app.get("/api/users/search", authRequired, async (req, res) => {
   try {
     const q = req.query.q || "";
+    const db = getSupabaseAdmin();
 
-    const users = await db.query(
-      `
-      SELECT
-        id,
-        username,
-        avatar_url
-      FROM users
-      WHERE
-        username ILIKE $1
-        AND id != $2
-      ORDER BY username
-      LIMIT 10
-      `,
-      [`%${q}%`, req.user.userId],
+    const { data: users, error } = await db
+      .from("moodsync_profiles")
+      .select("user_id, username, avatar_url")
+      .ilike("username", `%${q}%`)
+      .neq("user_id", req.user.userId)
+      .order("username")
+      .limit(10);
+
+    if (error) throw error;
+
+    res.json(
+      (users || []).map((u) => ({
+        id: u.user_id,
+        username: u.username,
+        avatar_url: u.avatar_url,
+      })),
     );
-
-    res.json(users.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({
@@ -852,107 +935,192 @@ app.get("/api/users/search", authRequired, async (req, res) => {
 
 app.post("/api/friends/request", authRequired, async (req, res) => {
   const { targetUsername } = req.body;
+  const db = getSupabaseAdmin();
 
-  const target = await db.query(
-    "SELECT id, username, email FROM users WHERE username=$1",
-    [targetUsername],
-  );
+  const { data: target } = await db
+    .from("moodsync_profiles")
+    .select("user_id, username")
+    .eq("username", targetUsername)
+    .maybeSingle();
 
-  if (!target.rows[0]) {
+  if (!target) {
     return res.status(404).json({ error: "User not found" });
   }
 
-  const sender = await db.query("SELECT username FROM users WHERE id=$1", [
-    req.user.userId,
-  ]);
+  const { data: sender } = await db
+    .from("moodsync_profiles")
+    .select("username")
+    .eq("user_id", req.user.userId)
+    .maybeSingle();
 
-  await db.query(
-    "INSERT INTO follows (follower_id, following_id, status) VALUES ($1,$2,'pending') ON CONFLICT DO NOTHING",
-    [req.user.userId, target.rows[0].id],
+  await db.from("mood_follows").upsert(
+    {
+      follower_id: req.user.userId,
+      following_id: target.user_id,
+      status: "pending",
+    },
+    { onConflict: "follower_id,following_id", ignoreDuplicates: true },
   );
 
-  // Fire-and-forget — don't block the response on email delivery
-  sendFriendRequestEmail(
-    target.rows[0].email,
-    target.rows[0].username,
-    sender.rows[0].username,
-  );
+  let targetEmail = null;
+  try {
+    const { data: authData } = await db.auth.admin.getUserById(target.user_id);
+    targetEmail = authData?.user?.email ?? null;
+  } catch (err) {
+    console.log("Could not look up target email:", err.message);
+  }
+
+  if (targetEmail) {
+    sendFriendRequestEmail(
+      targetEmail,
+      target.username,
+      sender?.username || "Someone",
+    );
+  }
 
   res.json({ sent: true });
 });
 
 app.post("/api/friends/accept/:followerId", authRequired, async (req, res) => {
-  await db.query(
-    "UPDATE follows SET status='accepted' WHERE follower_id=$1 AND following_id=$2",
-    [req.params.followerId, req.user.userId],
-  );
+  const db = getSupabaseAdmin();
 
-  await db.query(
-    "INSERT INTO follows (follower_id, following_id, status) VALUES ($1,$2,'accepted') ON CONFLICT DO NOTHING",
-    [req.user.userId, req.params.followerId],
+  await db
+    .from("mood_follows")
+    .update({ status: "accepted" })
+    .eq("follower_id", req.params.followerId)
+    .eq("following_id", req.user.userId);
+
+  await db.from("mood_follows").upsert(
+    {
+      follower_id: req.user.userId,
+      following_id: req.params.followerId,
+      status: "accepted",
+    },
+    { onConflict: "follower_id,following_id", ignoreDuplicates: true },
   );
 
   res.json({ accepted: true });
 });
 
 app.get("/api/friends", authRequired, async (req, res) => {
-  const rows = await db.query(
-    `SELECT u.id, u.username, u.avatar_url,
-       (SELECT mood_label FROM checkins WHERE user_id=u.id ORDER BY created_at DESC LIMIT 1) as last_mood
-     FROM follows f1
-     JOIN follows f2 ON f2.follower_id=f1.following_id AND f2.following_id=f1.follower_id
-     JOIN users u ON u.id=f1.following_id
-     WHERE f1.follower_id=$1 AND f1.status='accepted' AND f2.status='accepted'`,
-    [req.user.userId],
-  );
-  res.json(rows.rows);
+  const db = getSupabaseAdmin();
+  const userId = req.user.userId;
+
+  const { data: outgoing } = await db
+    .from("mood_follows")
+    .select("following_id")
+    .eq("follower_id", userId)
+    .eq("status", "accepted");
+
+  const { data: incoming } = await db
+    .from("mood_follows")
+    .select("follower_id")
+    .eq("following_id", userId)
+    .eq("status", "accepted");
+
+  const incomingSet = new Set((incoming || []).map((r) => r.follower_id));
+  const mutualIds = (outgoing || [])
+    .map((r) => r.following_id)
+    .filter((id) => incomingSet.has(id));
+
+  if (mutualIds.length === 0) {
+    return res.json([]);
+  }
+
+  const { data: profiles } = await db
+    .from("moodsync_profiles")
+    .select("user_id, username, avatar_url")
+    .in("user_id", mutualIds);
+
+  const result = [];
+  for (const u of profiles || []) {
+    const { data: lastCheckin } = await db
+      .from("mood_checkins")
+      .select("mood_label")
+      .eq("user_id", u.user_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    result.push({
+      id: u.user_id,
+      username: u.username,
+      avatar_url: u.avatar_url,
+      last_mood: lastCheckin?.mood_label ?? null,
+    });
+  }
+
+  res.json(result);
 });
 
 app.get("/api/friends/:friendId/mood-trend", authRequired, async (req, res) => {
-  const mutual = await db.query(
-    `SELECT 1 FROM follows f1 JOIN follows f2
-     ON f2.follower_id=f1.following_id AND f2.following_id=f1.follower_id
-     WHERE f1.follower_id=$1 AND f1.following_id=$2`,
-    [req.user.userId, req.params.friendId],
-  );
+  const db = getSupabaseAdmin();
+  const userId = req.user.userId;
+  const friendId = req.params.friendId;
 
-  if (!mutual.rows[0]) {
+  const { data: a } = await db
+    .from("mood_follows")
+    .select("follower_id")
+    .eq("follower_id", userId)
+    .eq("following_id", friendId)
+    .eq("status", "accepted")
+    .maybeSingle();
+
+  const { data: b } = await db
+    .from("mood_follows")
+    .select("follower_id")
+    .eq("follower_id", friendId)
+    .eq("following_id", userId)
+    .eq("status", "accepted")
+    .maybeSingle();
+
+  if (!a || !b) {
     return res.status(403).json({ error: "Not mutual friends" });
   }
 
-  const rows = await db.query(
-    `SELECT DATE(created_at) as day, AVG(score) as avg_score
-     FROM mood_snapshots WHERE user_id=$1 AND created_at >= NOW() - INTERVAL '7 days'
-     GROUP BY DATE(created_at) ORDER BY day`,
-    [req.params.friendId],
-  );
-  res.json(rows.rows);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: snapshots } = await db
+    .from("mood_snapshots")
+    .select("created_at, score")
+    .eq("user_id", friendId)
+    .gte("created_at", weekAgo);
+
+  const byDay = {};
+  for (const s of snapshots || []) {
+    const day = s.created_at?.slice(0, 10);
+    if (!day) continue;
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(Number(s.score) || 0);
+  }
+
+  const rows = Object.entries(byDay)
+    .map(([day, scores]) => ({
+      day,
+      avg_score: scores.reduce((a, b) => a + b, 0) / scores.length,
+    }))
+    .sort((x, y) => x.day.localeCompare(y.day));
+
+  res.json(rows);
 });
 
 app.put("/api/privacy", authRequired, async (req, res) => {
   const { share_mood, share_trends, share_ocean, share_music, share_fitness } =
     req.body;
+  const db = getSupabaseAdmin();
 
   try {
-    await db.query(
-      `UPDATE users
-       SET
-         share_mood=$1,
-         share_trends=$2,
-         share_ocean=$3,
-         share_music=$4,
-         share_fitness=$5
-       WHERE id=$6`,
-      [
+    const { error } = await db
+      .from("moodsync_profiles")
+      .update({
         share_mood,
         share_trends,
         share_ocean,
         share_music,
         share_fitness,
-        req.user.userId,
-      ],
-    );
+      })
+      .eq("user_id", req.user.userId);
 
+    if (error) throw error;
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -962,19 +1130,33 @@ app.put("/api/privacy", authRequired, async (req, res) => {
 
 app.get("/api/friends/pending", authRequired, async (req, res) => {
   try {
-    const rows = await db.query(
-      `
-      SELECT u.id, u.username
-      FROM follows f
-      JOIN users u ON u.id = f.following_id
-      WHERE
-        f.follower_id = $1
-        AND f.status = 'pending'
-      `,
-      [req.user.userId],
-    );
+    const db = getSupabaseAdmin();
+    const { data: follows, error } = await db
+      .from("mood_follows")
+      .select("following_id")
+      .eq("follower_id", req.user.userId)
+      .eq("status", "pending");
 
-    res.json(rows.rows);
+    if (error) throw error;
+
+    const ids = (follows || []).map((f) => f.following_id);
+    if (ids.length === 0) {
+      return res.json([]);
+    }
+
+    const { data: profiles, error: pErr } = await db
+      .from("moodsync_profiles")
+      .select("user_id, username")
+      .in("user_id", ids);
+
+    if (pErr) throw pErr;
+
+    res.json(
+      (profiles || []).map((u) => ({
+        id: u.user_id,
+        username: u.username,
+      })),
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({
@@ -1020,8 +1202,7 @@ async function fetchGoogleFitData(accessToken, startMs, endMs) {
     sleepHours: null,
   };
 }
-// Gemini sometimes wraps JSON responses in markdown code fences
-// (```json ... ```) even when told not to. Strip them before parsing.
+
 function extractJson(text) {
   const cleaned = text
     .trim()
@@ -1030,6 +1211,7 @@ function extractJson(text) {
     .replace(/```\s*$/i, "");
   return JSON.parse(cleaned);
 }
+
 async function sendFriendRequestEmail(toEmail, toUsername, fromUsername) {
   try {
     if (
@@ -1066,12 +1248,10 @@ async function sendFriendRequestEmail(toEmail, toUsername, fromUsername) {
       })
       .promise();
   } catch (err) {
-    // Email failure shouldn't break the friend request itself
     console.log("Failed to send friend request email:", err.message);
   }
 }
-// Retries a Gemini call up to `retries` times on transient errors (like 503s),
-// with a short delay between attempts.
+
 async function generateWithRetry(prompt, retries = 2, delayMs = 1000) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -1079,26 +1259,43 @@ async function generateWithRetry(prompt, retries = 2, delayMs = 1000) {
       return await result.response;
     } catch (err) {
       const isLastAttempt = attempt === retries;
-      const isTransient = err.message?.includes("503") || err.message?.includes("overloaded");
+      const isTransient =
+        err.message?.includes("503") || err.message?.includes("overloaded");
       if (isLastAttempt || !isTransient) throw err;
-      console.log(`Gemini call failed (attempt ${attempt + 1}/${retries + 1}), retrying...`);
+      console.log(
+        `Gemini call failed (attempt ${attempt + 1}/${retries + 1}), retrying...`,
+      );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
 }
-// Maps a self-reported mood label to a 0-100 baseline score.
+
 function moodLabelToScore(label) {
   const map = {
-    Excited: 90, Happy: 85, Grateful: 80, Focused: 70, Calm: 65,
-    Tired: 35, Anxious: 25, Sad: 20, Stressed: 15,
+    excited: 90,
+    Excited: 90,
+    happy: 85,
+    Happy: 85,
+    grateful: 80,
+    Grateful: 80,
+    focused: 70,
+    Focused: 70,
+    calm: 65,
+    Calm: 65,
+    tired: 35,
+    Tired: 35,
+    anxious: 25,
+    Anxious: 25,
+    sad: 20,
+    Sad: 20,
+    low: 20,
+    Low: 20,
+    stressed: 15,
+    Stressed: 15,
   };
-  return map[label] ?? 50;
+  return map[label] ?? map[String(label || "").toLowerCase()] ?? 50;
 }
 
-// Computes mood score from whatever real signals are actually available.
-// Spotify deprecated /v1/audio-features (Nov 2024), so we no longer fake
-// valence/energy — we use self-reported mood (most reliable), track
-// popularity (weak energy proxy), and steps, each weighted by confidence.
 function computeMoodScore({ moodLabel, trackPopularity, steps }) {
   const components = [];
 
@@ -1112,7 +1309,7 @@ function computeMoodScore({ moodLabel, trackPopularity, steps }) {
     components.push({ value: Math.min(steps / 10000, 1) * 100, weight: 0.2 });
   }
 
-  if (components.length === 0) return 50; // honest neutral default, no data at all
+  if (components.length === 0) return 50;
 
   const totalWeight = components.reduce((s, c) => s + c.weight, 0);
   const weighted = components.reduce((s, c) => s + c.value * c.weight, 0);
@@ -1120,11 +1317,12 @@ function computeMoodScore({ moodLabel, trackPopularity, steps }) {
 }
 
 async function refreshSpotifyToken(userId) {
-  const user = (
-    await db.query("SELECT spotify_refresh_token FROM users WHERE id=$1", [
-      userId,
-    ])
-  ).rows[0];
+  const db = getSupabaseAdmin();
+  const { data: user } = await db
+    .from("moodsync_profiles")
+    .select("spotify_refresh_token")
+    .eq("user_id", userId)
+    .maybeSingle();
 
   if (!user || !user.spotify_refresh_token) {
     console.log("No refresh token available for user:", userId);
@@ -1154,10 +1352,15 @@ async function refreshSpotifyToken(userId) {
     return null;
   }
 
-  await db.query(
-    "UPDATE users SET spotify_access_token=$1, spotify_token_expires=$2 WHERE id=$3",
-    [data.access_token, new Date(Date.now() + data.expires_in * 1000), userId],
-  );
+  await db
+    .from("moodsync_profiles")
+    .update({
+      spotify_access_token: data.access_token,
+      spotify_token_expires: new Date(
+        Date.now() + data.expires_in * 1000,
+      ).toISOString(),
+    })
+    .eq("user_id", userId);
 
   return data.access_token;
 }

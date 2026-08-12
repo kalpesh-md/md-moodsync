@@ -13,10 +13,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import MoodClock from "@/components/MoodClock";
-import { syncMood } from "@/api/mood";
-import type { MoodSyncData } from "@/api/mood";
-import { connectSpotify } from "@/api/spotify";
-import type { Checkin } from "@/api/checkins";
+import { syncMood } from "@/lib/api/mood";
+import type { MoodSyncData } from "@/lib/api/mood";
+import { connectSpotify } from "@/lib/api/spotify";
+import type { Checkin } from "@/lib/api/checkins";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

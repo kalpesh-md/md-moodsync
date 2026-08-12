@@ -10,10 +10,10 @@ import CheckInModal from "@/components/CheckInModal";
 import NavBar from "@/components/NavBar";
 import TopBar from "@/components/TopBar";
 import Login from "@/components/Login";
-import { getMe } from "@/api/user";
-import type { User } from "@/api/user";
-import { createCheckin, getCheckins, getLatestCheckin } from "@/api/checkins";
-import type { Checkin } from "@/api/checkins";
+import { getMe } from "@/lib/api/user";
+import type { User } from "@/lib/api/user";
+import { createCheckin, getCheckins, getLatestCheckin } from "@/lib/api/checkins";
+import type { Checkin } from "@/lib/api/checkins";
 import { Loader2 } from "lucide-react";
 
 const CHECKIN_PROMPT_GAP_HOURS = 6;

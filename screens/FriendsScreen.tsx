@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import React from "react";
-import { getPrivacy, updatePrivacy } from "@/api/privacy";
-import type { PrivacySettings } from "@/api/privacy";
+import { getPrivacy, updatePrivacy } from "@/lib/api/privacy";
+import type { PrivacySettings } from "@/lib/api/privacy";
 import FriendMoodChart from "@/components/FriendMoodChart";
 import {
   getFriends,
@@ -14,8 +14,8 @@ import {
   ignoreFriendRequest,
   searchUsers,
   getFriendMoodTrend,
-} from "@/api/friends";
-import type { FriendUser, MoodTrendPoint } from "@/api/friends";
+} from "@/lib/api/friends";
+import type { FriendUser, MoodTrendPoint } from "@/lib/api/friends";
 
 type PrivacyKey = keyof PrivacySettings;
 

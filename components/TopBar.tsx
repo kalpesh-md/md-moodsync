@@ -9,9 +9,9 @@ import {
   Sun,
   UserRound,
 } from "lucide-react";
-import { connectGoogleFit } from "@/api/googlefit";
-import { connectSpotify } from "@/api/spotify";
-import type { User } from "@/api/user";
+import { connectGoogleFit } from "@/lib/api/googlefit";
+import { connectSpotify } from "@/lib/api/spotify";
+import type { User } from "@/lib/api/user";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";

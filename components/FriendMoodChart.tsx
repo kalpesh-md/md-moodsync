@@ -12,7 +12,7 @@ import {
 } from "chart.js";
 
 import { Line } from "react-chartjs-2";
-import type { MoodTrendPoint } from "@/api/friends";
+import type { MoodTrendPoint } from "@/lib/api/friends";
 
 ChartJS.register(
   CategoryScale,

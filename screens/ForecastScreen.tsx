@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getForecast } from "@/api/forecast";
-import type { ForecastItem } from "@/api/forecast";
+import { getForecast } from "@/lib/api/forecast";
+import type { ForecastItem } from "@/lib/api/forecast";
 
 interface MoodStyle {
   keys?: string[];
