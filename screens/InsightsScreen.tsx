@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Brain, Loader2 } from "lucide-react";
+import { Brain } from "lucide-react";
+import { InlineLoader } from "@/components/Loaders";
 import {
   Card,
   CardContent,
@@ -96,12 +97,7 @@ export default function InsightsScreen({ checkins: _checkins }: InsightsScreenPr
   ];
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-navy" />
-        <p className="text-sm">Analyzing your personality…</p>
-      </div>
-    );
+    return <InlineLoader message="Analyzing your personality…" />;
   }
 
   const ocean = personality?.ocean || { O: 60, C: 65, E: 55, A: 50, N: 40 };

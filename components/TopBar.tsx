@@ -5,7 +5,6 @@ import Image from "next/image";
 import {
   Activity,
   ArrowLeft,
-  LogOut,
   Moon,
   Music2,
   Sun,
@@ -20,11 +19,10 @@ import { Separator } from "@/components/ui/separator";
 
 interface TopBarProps {
   onCheckIn: () => void;
-  onLogout: () => void;
   user: User | null;
 }
 
-export default function TopBar({ onCheckIn, onLogout, user }: TopBarProps) {
+export default function TopBar({ onCheckIn, user }: TopBarProps) {
   const [isDark, setIsDark] = useState(false);
 
   const moodscaleUrl =
@@ -84,17 +82,6 @@ export default function TopBar({ onCheckIn, onLogout, user }: TopBarProps) {
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
 
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="gap-1.5 text-muted-foreground"
-          >
-            <a href={`${moodscaleUrl}/dashboard`}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Back to MoodScale</span>
-            </a>
-          </Button>
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
             {isDark ? <Sun /> : <Moon />}
           </Button>
@@ -119,8 +106,15 @@ export default function TopBar({ onCheckIn, onLogout, user }: TopBarProps) {
           <Button size="sm" onClick={onCheckIn}>
             Check In
           </Button>
-          <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Log out">
-            <LogOut />
+          <Button
+            size="sm"
+            asChild
+            className="gap-1.5 bg-gradient-to-r from-navy to-blue-700 text-white shadow-md hover:from-navy-dark hover:to-blue-800"
+          >
+            <a href={`${moodscaleUrl}/dashboard`}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">MoodScale</span>
+            </a>
           </Button>
         </div>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Headphones, Loader2, ExternalLink } from "lucide-react";
+import { Headphones, ExternalLink } from "lucide-react";
+import { InlineLoader } from "@/components/Loaders";
 import {
   Card,
   CardContent,
@@ -63,12 +64,7 @@ export default function RecsScreen() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-navy" />
-        <p className="text-sm">Finding your perfect tracks…</p>
-      </div>
-    );
+    return <InlineLoader message="Finding your perfect tracks…" />;
   }
 
   return (

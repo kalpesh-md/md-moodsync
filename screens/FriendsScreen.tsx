@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Search, Users } from "lucide-react";
+import { InlineLoader } from "@/components/Loaders";
 
 type PrivacyKey = keyof PrivacySettings;
 
@@ -104,6 +105,7 @@ export default function FriendsScreen() {
     null,
   );
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
   const [privacy, setPrivacy] = useState<PrivacySettings>({
     mood: true,
     trends: true,
@@ -150,6 +152,8 @@ export default function FriendsScreen() {
       );
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -187,6 +191,10 @@ export default function FriendsScreen() {
   const filtered = friends.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()),
   );
+
+  if (loading) {
+    return <InlineLoader message="Loading your friends…" />;
+  }
 
   return (
     <div className="space-y-5">

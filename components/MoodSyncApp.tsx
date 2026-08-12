@@ -14,7 +14,7 @@ import { getMe } from "@/lib/api/user";
 import type { User } from "@/lib/api/user";
 import { createCheckin, getCheckins, getLatestCheckin } from "@/lib/api/checkins";
 import type { Checkin } from "@/lib/api/checkins";
-import { Loader2 } from "lucide-react";
+import { BrandLoader } from "@/components/Loaders";
 
 const CHECKIN_PROMPT_GAP_HOURS = 6;
 
@@ -80,12 +80,6 @@ export default function MoodSyncApp() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
-    setUser(null);
-  };
-
   useEffect(() => {
     setIsLoggedIn(!!localStorage.getItem("token"));
     setAuthReady(true);
@@ -123,11 +117,7 @@ export default function MoodSyncApp() {
   }, [isLoggedIn]);
 
   if (!authReady) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    );
+    return <BrandLoader message="Loading MoodSync…" />;
   }
 
   if (!isLoggedIn) {
@@ -136,11 +126,7 @@ export default function MoodSyncApp() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopBar
-        user={user}
-        onCheckIn={() => setCheckInOpen(true)}
-        onLogout={handleLogout}
-      />
+      <TopBar user={user} onCheckIn={() => setCheckInOpen(true)} />
       <div className="flex w-full flex-1">
         <NavBar active={activeScreen} onChange={setActiveScreen} />
         <main className="min-w-0 flex-1 px-4 py-5 pb-24 md:px-8 md:pb-8">

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { CloudSun, Loader2 } from "lucide-react";
+import { CloudSun } from "lucide-react";
+import { InlineLoader } from "@/components/Loaders";
 import { getForecast } from "@/lib/api/forecast";
 import type { ForecastItem } from "@/lib/api/forecast";
 import {
@@ -65,12 +66,7 @@ export default function ForecastScreen() {
   const timeIcons = ["⏰", "🌙", "☀️"];
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-navy" />
-        <p className="text-sm">Analyzing your mood patterns…</p>
-      </div>
-    );
+    return <InlineLoader message="Analyzing your mood patterns…" />;
   }
 
   if (error || !forecast || forecast.length === 0) {
