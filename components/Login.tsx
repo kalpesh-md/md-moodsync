@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useMoodScaleUrl } from "@/lib/useMoodScaleUrl";
 
 interface LoginProps {
   onLogin?: () => void;
@@ -16,8 +17,7 @@ interface LoginProps {
 
 /** MoodSync is entered via MoodScale SSO — no local password login. */
 export default function Login(_props: LoginProps) {
-  const moodscaleUrl =
-    process.env.NEXT_PUBLIC_MOODSCALE_URL || "http://localhost:8000";
+  const moodscaleUrl = useMoodScaleUrl();
 
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4">

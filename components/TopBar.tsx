@@ -16,6 +16,7 @@ import type { User } from "@/lib/api/user";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useMoodScaleUrl } from "@/lib/useMoodScaleUrl";
 
 interface TopBarProps {
   onCheckIn: () => void;
@@ -25,8 +26,7 @@ interface TopBarProps {
 export default function TopBar({ onCheckIn, user }: TopBarProps) {
   const [isDark, setIsDark] = useState(false);
 
-  const moodscaleUrl =
-    process.env.NEXT_PUBLIC_MOODSCALE_URL || "https://moodscale.in";
+  const moodscaleUrl = useMoodScaleUrl();
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");

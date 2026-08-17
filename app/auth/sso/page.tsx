@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { exchangeSsoToken } from "@/lib/api/auth";
 import { BrandLoader } from "@/components/Loaders";
+import { storeMoodScaleReturnUrl } from "@/lib/moodscaleUrl";
 
 export default function SsoPage() {
   const router = useRouter();
@@ -12,6 +13,9 @@ export default function SsoPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
+    const returnUrl = params.get("returnUrl");
+
+    storeMoodScaleReturnUrl(returnUrl);
 
     if (!token) {
       setError("Missing SSO token. Open MoodSync from MoodScale.");
