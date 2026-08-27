@@ -81,8 +81,8 @@ export default function CheckInModal({
               className={cn(
                 "flex flex-col items-center gap-1 rounded-xl border p-3 text-xs transition-all",
                 selected?.name === m.name
-                  ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/30"
-                  : "border-border hover:bg-muted/60",
+                  ? "border-navy bg-[#E9EEF5] shadow-sm ring-2 ring-navy/20 dark:bg-slate-800"
+                  : "border-line hover:bg-[#F4F6FA] dark:border-slate-700 dark:hover:bg-slate-800",
               )}
             >
               <span className="text-xl">{m.emoji}</span>
@@ -123,8 +123,8 @@ export default function CheckInModal({
               className={cn(
                 "flex h-8 flex-1 items-center justify-center rounded-md text-xs font-medium",
                 checkins[i]
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground",
+                  ? "bg-navy text-white"
+                  : "bg-[#F4F6FA] text-slate-400 dark:bg-slate-700 dark:text-slate-400",
               )}
             >
               {d}

@@ -20,9 +20,8 @@ export default function Login(_props: LoginProps) {
   const moodscaleUrl = useMoodScaleUrl();
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center p-4">
-      <Card className="relative z-10 w-full max-w-md overflow-hidden shadow-xl">
-        <div className="h-1.5 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
+    <div className="ms-canvas relative flex min-h-dvh items-center justify-center p-4">
+      <Card className="relative z-10 w-full max-w-md">
         <CardHeader className="space-y-3 text-center">
           <Image
             src="/images/moodscale_logo1.png"
@@ -32,7 +31,7 @@ export default function Login(_props: LoginProps) {
             className="mx-auto h-9 w-auto"
             priority
           />
-          <CardTitle className="bg-gradient-to-r from-navy via-blue-600 to-violet-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent dark:from-blue-300 dark:via-violet-300 dark:to-fuchsia-300">
+          <CardTitle className="text-2xl font-bold tracking-tight text-navy dark:text-slate-100">
             MoodSync
           </CardTitle>
           <CardDescription>
@@ -40,7 +39,7 @@ export default function Login(_props: LoginProps) {
             automatically.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex justify-center">
+        <CardContent className="flex justify-center pb-8">
           <Button asChild>
             <a href={`${moodscaleUrl}/api/moodsync/launch`}>
               Continue with MoodScale

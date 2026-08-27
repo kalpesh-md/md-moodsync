@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import TodayScreen from "@/screens/TodayScreen";
 import ForecastScreen from "@/screens/ForecastScreen";
 import FriendsScreen from "@/screens/FriendsScreen";
@@ -10,6 +10,7 @@ import CheckInModal from "@/components/CheckInModal";
 import NavBar from "@/components/NavBar";
 import TopBar from "@/components/TopBar";
 import Login from "@/components/Login";
+import { NoticeProvider, useNotice } from "@/components/notice-provider";
 import { getMe } from "@/lib/api/user";
 import type { User } from "@/lib/api/user";
 import { createCheckin, getCheckins, getLatestCheckin } from "@/lib/api/checkins";
@@ -37,7 +38,8 @@ function shouldPromptCheckIn(latestCheckin: Checkin | null): boolean {
   return hoursSinceLast >= CHECKIN_PROMPT_GAP_HOURS;
 }
 
-export default function MoodSyncApp() {
+function MoodSyncShell() {
+  const notice = useNotice();
   const [activeScreen, setActiveScreen] = useState<ScreenId>("today");
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkins, setCheckins] = useState<boolean[]>([
@@ -53,6 +55,7 @@ export default function MoodSyncApp() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [latestCheckin, setLatestCheckin] = useState<Checkin | null>(null);
+  const shownConnectNotice = useRef(false);
 
   const screens: Record<ScreenId, React.ReactNode> = {
     today: <TodayScreen checkins={checkins} latest={latestCheckin} />,
@@ -76,7 +79,7 @@ export default function MoodSyncApp() {
       setCheckInOpen(false);
     } catch (err) {
       console.error(err);
-      alert("Check-in failed");
+      notice.error("Check-in failed", "Please try again in a moment.");
     }
   };
 
@@ -86,16 +89,26 @@ export default function MoodSyncApp() {
   }, []);
 
   useEffect(() => {
+    if (shownConnectNotice.current) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("connected") === "spotify") {
-      alert("Spotify connected");
+    const connected = params.get("connected");
+    if (connected === "spotify") {
+      shownConnectNotice.current = true;
+      notice.success(
+        "Spotify connected",
+        "Your listening will now feed into your mood score.",
+      );
       window.history.replaceState({}, "", "/");
     }
-    if (params.get("connected") === "googlefit") {
-      alert("Google Fit connected");
+    if (connected === "googlefit") {
+      shownConnectNotice.current = true;
+      notice.success(
+        "Google Fit connected",
+        "Sleep and steps will now sync into your snapshot.",
+      );
       window.history.replaceState({}, "", "/");
     }
-  }, []);
+  }, [notice]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -125,14 +138,21 @@ export default function MoodSyncApp() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <TopBar user={user} onCheckIn={() => setCheckInOpen(true)} />
-      <div className="flex w-full flex-1">
-        <NavBar active={activeScreen} onChange={setActiveScreen} />
-        <main className="min-w-0 flex-1 px-4 py-5 pb-24 md:px-8 md:pb-8">
+    <div className="ms-canvas relative min-h-dvh">
+      <header className="sticky top-0 z-30 bg-[#F7F8FA]/70 px-4 py-3 backdrop-blur-sm md:px-6 md:py-4 dark:bg-gray-900/70">
+        <TopBar user={user} onCheckIn={() => setCheckInOpen(true)} />
+      </header>
+
+      <div className="flex items-start gap-5 px-4 pb-24 md:gap-6 md:px-6 md:pb-12">
+        <aside className="sticky top-[80px] z-20 hidden h-[calc(100dvh-104px)] w-[236px] shrink-0 md:block">
+          <NavBar variant="desktop" active={activeScreen} onChange={setActiveScreen} />
+        </aside>
+        <main className="min-h-[calc(100dvh-96px)] min-w-0 flex-1">
           {screens[activeScreen]}
         </main>
       </div>
+      <NavBar variant="mobile" active={activeScreen} onChange={setActiveScreen} />
+
       <CheckInModal
         open={checkInOpen}
         onOpenChange={setCheckInOpen}
@@ -140,5 +160,13 @@ export default function MoodSyncApp() {
         checkins={checkins}
       />
     </div>
+  );
+}
+
+export default function MoodSyncApp() {
+  return (
+    <NoticeProvider>
+      <MoodSyncShell />
+    </NoticeProvider>
   );
 }

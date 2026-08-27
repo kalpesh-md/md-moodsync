@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, Users } from "lucide-react";
 import { InlineLoader } from "@/components/Loaders";
+import { useNotice } from "@/components/notice-provider";
 
 type PrivacyKey = keyof PrivacySettings;
 
@@ -95,6 +96,7 @@ function Avatar({
 }
 
 export default function FriendsScreen() {
+  const notice = useNotice();
   const [searchResults, setSearchResults] = useState<FriendUser[]>([]);
   const [pendingRequests, setPendingRequests] = useState<FriendUser[]>([]);
   const [trendData, setTrendData] = useState<MoodTrendPoint[]>([]);
@@ -164,7 +166,7 @@ export default function FriendsScreen() {
       setShowTrend(true);
     } catch (err) {
       console.error(err);
-      alert("Unable to load mood trend.");
+      notice.error("Unable to load mood trend", "Please try again in a moment.");
     }
   }
 
@@ -184,7 +186,7 @@ export default function FriendsScreen() {
       loadFriends();
     } catch (err) {
       console.error(err);
-      alert("Failed to accept friend request");
+      notice.error("Couldn’t accept request", "Please try again.");
     }
   };
 
@@ -199,7 +201,7 @@ export default function FriendsScreen() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-md">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
           <Users className="h-5 w-5" />
         </span>
         <div>
@@ -258,11 +260,17 @@ export default function FriendsScreen() {
                   onClick={async () => {
                     try {
                       await sendFriendRequest(user.username);
-                      alert("Friend request sent!");
+                      notice.success(
+                        "Friend request sent",
+                        `We notified ${user.username}.`,
+                      );
                       setSearch("");
                       setSearchResults([]);
                     } catch {
-                      alert("Unable to send request.");
+                      notice.error(
+                        "Unable to send request",
+                        "Check the username and try again.",
+                      );
                     }
                   }}
                 >
@@ -337,7 +345,7 @@ export default function FriendsScreen() {
                         setRequests((r) => r.filter((x) => x.id !== req.id));
                       } catch (err) {
                         console.error(err);
-                        alert("Failed to ignore request");
+                        notice.error("Couldn’t ignore request", "Please try again.");
                       }
                     }}
                   >
@@ -418,7 +426,7 @@ export default function FriendsScreen() {
                     });
                   } catch (err) {
                     console.error(err);
-                    alert("Failed to save settings");
+                    notice.error("Couldn’t save settings", "Your privacy toggles were not updated.");
                   }
                 }}
               />

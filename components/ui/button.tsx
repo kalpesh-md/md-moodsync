@@ -5,26 +5,26 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-navy text-white shadow-sm hover:bg-navy-dark dark:bg-navy dark:hover:bg-navy-dark",
+          "bg-navy text-white shadow-[0_1px_2px_rgba(16,24,40,0.08)] hover:bg-navy-dark",
         destructive:
-          "bg-red-500 text-white shadow-sm hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700",
+          "bg-red-500 text-white hover:bg-red-600",
         outline:
-          "border border-slate-200 dark:border-slate-700 bg-transparent shadow-sm hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100",
+          "border border-line-strong bg-white text-slate-700 hover:border-navy hover:text-navy dark:border-slate-600 dark:bg-transparent dark:text-slate-200 dark:hover:border-slate-400",
         secondary:
-          "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm hover:bg-slate-200 dark:hover:bg-slate-700",
-        ghost: "hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100",
-        link: "text-navy dark:text-blue-300 underline-offset-4 hover:underline",
+          "bg-[#E9EEF5] text-navy hover:bg-[#dce4ef] dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
+        ghost: "hover:bg-[#F4F6FA] hover:text-navy dark:hover:bg-slate-800 dark:hover:text-slate-100",
+        link: "text-navy underline-offset-4 hover:underline dark:text-blue-300",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-10 px-5 py-2",
+        sm: "h-9 px-3.5 text-xs",
+        lg: "h-11 px-6",
+        icon: "h-9 w-9 rounded-xl",
       },
     },
     defaultVariants: {

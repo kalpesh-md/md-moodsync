@@ -88,7 +88,7 @@ export default function ForecastScreen() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
           <CloudSun className="h-5 w-5" />
         </span>
         <div>

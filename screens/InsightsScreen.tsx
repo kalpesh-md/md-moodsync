@@ -134,7 +134,7 @@ export default function InsightsScreen({ checkins: _checkins }: InsightsScreenPr
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
           <Brain className="h-5 w-5" />
         </span>
         <div>
@@ -147,7 +147,7 @@ export default function InsightsScreen({ checkins: _checkins }: InsightsScreenPr
         </div>
       </div>
 
-      <Card className="border-navy/20 bg-gradient-to-br from-white to-[var(--ms-sky)] dark:from-slate-800 dark:to-slate-900">
+      <Card className="border-navy/15 bg-[#F7F8FA] dark:bg-slate-800">
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <div>
             <CardDescription>MBTI estimate</CardDescription>
@@ -196,7 +196,7 @@ export default function InsightsScreen({ checkins: _checkins }: InsightsScreenPr
 
       <div className="grid gap-3 md:grid-cols-3">
         {insightCards.map((insight, idx) => (
-          <Card key={idx} className="bg-[var(--ms-sky)]/60 dark:bg-slate-800/80">
+          <Card key={idx} className="bg-[#F4F6FA] dark:bg-slate-800/80">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">{insight.head}</CardTitle>
             </CardHeader>

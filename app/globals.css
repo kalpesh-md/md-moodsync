@@ -28,8 +28,11 @@
 
     --ms-navy: #1e3a5f;
     --ms-navy-dark: #152a45;
+    --ms-mid: #2d5a8b;
     --ms-sky: #f0f9ff;
     --ms-blue: #378add;
+    --ms-line: #e5e8ee;
+    --ms-ink: #0f172a;
   }
 
   .dark {
@@ -61,27 +64,26 @@
   }
   html,
   body {
-    @apply min-h-full bg-background text-foreground antialiased;
+    @apply min-h-full bg-[#F7F8FA] text-foreground antialiased;
+  }
+  .dark html,
+  .dark body {
+    @apply bg-gray-900;
   }
   body {
-    background-image:
-      radial-gradient(
-        ellipse 80% 50% at 50% -20%,
-        hsl(213 52% 24% / 0.1),
-        transparent
-      ),
-      linear-gradient(180deg, hsl(var(--background)), hsl(204 94% 96%));
     background-attachment: fixed;
   }
-  .dark body {
-    background-image:
-      radial-gradient(
-        ellipse 80% 50% at 50% -20%,
-        hsl(213 52% 45% / 0.15),
-        transparent
-      ),
-      linear-gradient(135deg, #111827 0%, #1f2937 50%, #111827 100%);
-  }
+}
+
+.ms-canvas {
+  background:
+    radial-gradient(1200px 600px at 100% -10%, #f0f9ff 0%, rgba(240, 249, 255, 0) 60%),
+    #f7f8fa;
+  background-attachment: fixed;
+}
+.dark .ms-canvas {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 50%, #111827 100%);
+  background-attachment: fixed;
 }
 
 /* Mood clock (scoped; not the old global dark theme) */

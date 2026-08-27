@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import MoodClock from "@/components/MoodClock";
+import { useNotice } from "@/components/notice-provider";
 import { syncMood } from "@/lib/api/mood";
 import type { MoodSyncData } from "@/lib/api/mood";
 import { connectSpotify } from "@/lib/api/spotify";
@@ -27,9 +28,38 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
+const CIRC = 2 * Math.PI * 44;
+
+function ScoreRing({ score }: { score: number }) {
+  return (
+    <div className="relative h-24 w-24 shrink-0">
+      <svg viewBox="0 0 100 100" className="h-24 w-24 -rotate-90">
+        <circle cx="50" cy="50" r="44" fill="none" className="stroke-[#E9EEF5] dark:stroke-slate-700" strokeWidth="9" />
+        <circle
+          cx="50"
+          cy="50"
+          r="44"
+          fill="none"
+          className="stroke-navy"
+          strokeWidth="9"
+          strokeLinecap="round"
+          strokeDasharray={CIRC}
+          strokeDashoffset={CIRC * (1 - Math.min(100, Math.max(0, score)) / 100)}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold leading-none text-navy dark:text-slate-100">
+          {Math.round(score)}
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          score
+        </span>
+      </div>
+    </div>
+  );
+}
 
 interface TodayScreenProps {
   checkins: boolean[];
@@ -37,6 +67,7 @@ interface TodayScreenProps {
 }
 
 export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
+  const notice = useNotice();
   const [syncData, setSyncData] = useState<MoodSyncData | null>(null);
   const [syncing, setSyncing] = useState(false);
   const count = checkins.filter(Boolean).length;
@@ -83,53 +114,60 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Export failed");
+      notice.error("Export failed", "We couldn't download your check-ins. Please try again.");
     }
   };
 
   const signals = [
     {
       icon: Music2,
-      label: "Now playing",
-      gradient: "from-violet-500 to-fuchsia-500",
+      label: "Listening",
       value: syncData?.track?.name
-        ? `${syncData.track.name} · ${syncData.track.artist}${syncData.track.isRecent ? " (recent)" : ""}`
+        ? syncData.track.name
         : syncing
-          ? "Fetching..."
-          : "Nothing playing",
+          ? "Fetching…"
+          : "—",
+      detail: syncData?.track?.artist
+        ? `${syncData.track.artist}${syncData.track.isRecent ? " · recent" : ""}`
+        : "Connect Spotify",
     },
     {
       icon: Heart,
       label: "Heart rate",
-      gradient: "from-rose-500 to-red-500",
       value: syncData?.fitData?.heartRate
         ? `${Math.round(syncData.fitData.heartRate)} bpm`
-        : "No data",
+        : "—",
+      detail: syncData?.fitData?.heartRate ? "Latest reading" : "Connect Google Fit",
     },
     {
       icon: Footprints,
-      label: "Steps today",
-      gradient: "from-emerald-500 to-teal-500",
+      label: "Steps",
       value: syncData?.fitData?.steps
-        ? `${syncData.fitData.steps.toLocaleString()} / 10,000`
-        : "No data",
+        ? syncData.fitData.steps.toLocaleString()
+        : "—",
+      detail: syncData?.fitData?.steps ? "Today" : "Connect Google Fit",
     },
     {
       icon: Moon,
-      label: "Sleep last night",
-      gradient: "from-indigo-500 to-purple-500",
+      label: "Sleep",
       value: syncData?.fitData?.sleepHours
         ? `${syncData.fitData.sleepHours}h`
-        : "No data",
+        : "—",
+      detail: syncData?.fitData?.sleepHours ? "Last night" : "Connect Google Fit",
     },
   ];
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <header className="mb-1 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Today</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Today
+          </p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-navy dark:text-slate-100">
+            Your mood right now
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Live mood from check-ins, Spotify, and Google Fit
           </p>
         </div>
@@ -147,14 +185,13 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
             Sync
           </Button>
         </div>
-      </div>
+      </header>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
+        <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+            <CardTitle className="flex items-center gap-2 text-[15px]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
                 <Sparkles className="h-4 w-4" />
               </span>
               Mood score
@@ -166,26 +203,23 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <ScoreRing score={moodScore} />
               <div>
-                <p className="bg-gradient-to-r from-navy via-blue-600 to-violet-600 bg-clip-text text-5xl font-bold tracking-tight tabular-nums text-transparent dark:from-blue-300 dark:via-violet-300 dark:to-fuchsia-300">
-                  {moodScore}
+                <p className="text-sm font-semibold text-navy dark:text-slate-100">
+                  Mood score {moodScore}
                 </p>
-                <p className="text-sm text-muted-foreground">out of 100</p>
+                <p className="mt-1 text-xs text-slate-500">out of 100</p>
+                <Badge variant="secondary" className="mt-2">
+                  {moodScore >= 60 ? "Positive" : moodScore >= 40 ? "Neutral" : "Low"}
+                </Badge>
               </div>
-              <Badge variant="secondary">
-                {moodScore >= 60
-                  ? "Positive"
-                  : moodScore >= 40
-                    ? "Neutral"
-                    : "Low"}
-              </Badge>
             </div>
-            <Progress value={moodScore} className="h-2.5" />
+            <Progress value={moodScore} className="h-1.5" />
             {!syncData?.track?.name && (
               <Button variant="outline" size="sm" onClick={connectSpotify}>
                 <Music2 className="h-4 w-4" />
-                Connect Spotify for richer signals
+                Connect Spotify
               </Button>
             )}
           </CardContent>
@@ -193,25 +227,25 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Weekly streak</CardTitle>
+            <CardTitle className="text-[15px]">Weekly streak</CardTitle>
             <CardDescription>{count} of 7 days checked in</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-3 flex gap-2">
+            <div className="mb-3 flex gap-1.5">
               {DAYS.map((d, i) => (
                 <div
                   key={`${d}-${i}`}
-                  className={`flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                  className={`flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold ${
                     checkins[i]
-                      ? "bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm"
-                      : "bg-muted text-muted-foreground"
+                      ? "bg-navy text-white"
+                      : "bg-[#F4F6FA] text-slate-400 dark:bg-slate-700 dark:text-slate-400"
                   }`}
                 >
                   {d}
                 </div>
               ))}
             </div>
-            <Progress value={(count / 7) * 100} />
+            <Progress value={(count / 7) * 100} className="h-1.5" />
           </CardContent>
         </Card>
       </div>
@@ -220,19 +254,18 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         {signals.map((s) => {
           const Icon = s.icon;
           return (
-            <Card key={s.label} className="shadow-sm">
-              <CardContent className="flex items-start gap-3 p-4">
-                <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow-sm ${s.gradient}`}
-                >
+            <Card key={s.label}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-navy dark:text-slate-200">
                   <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                     {s.label}
-                  </p>
-                  <p className="truncate text-sm font-medium">{s.value}</p>
+                  </span>
                 </div>
+                <div className="mt-1.5 truncate text-lg font-bold leading-none text-navy dark:text-slate-100">
+                  {s.value}
+                </div>
+                <div className="mt-1 text-[11px] text-slate-400">{s.detail}</div>
               </CardContent>
             </Card>
           );
@@ -241,8 +274,8 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-sm">
+          <CardTitle className="flex items-center gap-2 text-[15px]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
               <Activity className="h-4 w-4" />
             </span>
             Mood clock
@@ -250,7 +283,6 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           <CardDescription>Your day mapped by mood periods</CardDescription>
         </CardHeader>
         <CardContent>
-          <Separator className="mb-4" />
           <MoodClock />
         </CardContent>
       </Card>

@@ -48,9 +48,18 @@ export default {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         navy: {
-          DEFAULT: "#1e3a5f",
-          dark: "#152a45",
+          DEFAULT: "#1E3A5F",
+          dark: "#152A45",
+          mid: "#2D5A8B",
         },
+        line: {
+          DEFAULT: "#E5E8EE",
+          strong: "#D5DBE5",
+        },
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(16,24,40,0.04), 0 6px 20px rgba(16,24,40,0.05)",
+        lift: "0 10px 30px rgba(16,24,40,0.10)",
       },
       borderRadius: {
         lg: "var(--radius)",

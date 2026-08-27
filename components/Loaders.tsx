@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /** Full-screen branded loader (SSO handoff, app boot). */
 export function BrandLoader({ message }: { message?: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 text-center">
+    <div className="ms-canvas flex min-h-dvh flex-col items-center justify-center gap-6 p-6 text-center">
       <Image
         src="/images/moodscale_logo1.png"
         alt="MoodScale"
@@ -40,13 +40,13 @@ function Spinner({ className }: { className?: string }) {
     <span className="relative inline-flex">
       <span
         className={cn(
-          "animate-spin rounded-full border-slate-200 border-t-violet-500 dark:border-slate-700 dark:border-t-violet-400",
+          "animate-spin rounded-full border-line border-t-navy dark:border-slate-700 dark:border-t-slate-200",
           className,
         )}
       />
       <span
         className={cn(
-          "absolute inset-0 animate-spin rounded-full border-transparent border-b-blue-500 opacity-70 [animation-duration:1.6s] dark:border-b-blue-400",
+          "absolute inset-0 animate-spin rounded-full border-transparent border-b-navy-mid opacity-70 [animation-duration:1.6s] dark:border-b-slate-400",
           className,
         )}
       />
