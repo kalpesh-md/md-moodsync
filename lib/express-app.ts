@@ -481,39 +481,53 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
 
   const { data: lastSnapshots } = await db
     .from("mood_snapshots")
-    .select("track_id, created_at")
+    .select("id, track_id, track_name, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1);
 
   const lastSnapshot = lastSnapshots?.[0];
+  const trackId = nowPlaying?.item?.id || null;
+  const trackName = nowPlaying?.item?.name || null;
+  const artistName = nowPlaying?.item?.artists?.[0]?.name || null;
+  const albumArt = nowPlaying?.item?.album?.images?.[0]?.url || null;
 
-  const sameTrack = lastSnapshot?.track_id === (nowPlaying?.item?.id || null);
+  const sameTrack = lastSnapshot?.track_id === trackId;
   const secondsSinceLast = lastSnapshot
     ? (Date.now() - new Date(lastSnapshot.created_at).getTime()) / 1000
     : Infinity;
 
   const shouldSkipInsert = sameTrack && secondsSinceLast < 300;
 
-  if (!shouldSkipInsert) {
+  const snapshotFields = {
+    score: moodScore,
+    valence: null,
+    energy: null,
+    steps: fitData.steps,
+    heart_rate: fitData.heartRate,
+    sleep_hours: fitData.sleepHours,
+    track_id: trackId,
+    track_name: trackName,
+    artist_name: artistName,
+    album_art: albumArt,
+  };
+
+  if (shouldSkipInsert && lastSnapshot?.id) {
+    await db.from("mood_snapshots").update(snapshotFields).eq("id", lastSnapshot.id);
+  } else {
     await db.from("mood_snapshots").insert({
       user_id: userId,
-      score: moodScore,
-      valence: null,
-      energy: null,
-      steps: fitData.steps,
-      heart_rate: fitData.heartRate,
-      sleep_hours: fitData.sleepHours,
-      track_id: nowPlaying?.item?.id || null,
       created_at: new Date().toISOString(),
+      ...snapshotFields,
     });
   }
 
   res.json({
     moodScore,
     track: {
-      name: nowPlaying?.item?.name || null,
-      artist: nowPlaying?.item?.artists?.[0]?.name || null,
+      name: trackName,
+      artist: artistName,
+      isRecent: Boolean(nowPlaying?.isRecent),
     },
     fitData,
   });
