@@ -33,9 +33,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Users } from "lucide-react";
+import { Search, UserPlus, Users, Loader2, Check, X } from "lucide-react";
 import { InlineLoader } from "@/components/Loaders";
 import { useNotice } from "@/components/notice-provider";
+import { formatMoodLabel, formatUsername, moodMatchPercent } from "@/lib/utils";
 
 type PrivacyKey = keyof PrivacySettings;
 
@@ -53,6 +54,17 @@ const PRIVACY: PrivacyOption[] = [
   { key: "fitness", label: "Share fitness data", default: false },
 ];
 
+const MOOD_COLORS: Record<string, string> = {
+  happy: "#4ECDC4",
+  focused: "#7F77DD",
+  calm: "#45B7D1",
+  excited: "#FF6B6B",
+  tired: "#F7B731",
+  anxious: "#C084FC",
+  stressed: "#FF8C42",
+  low: "#A8A8A8",
+};
+
 interface FriendDisplay {
   id: string | number;
   name: string;
@@ -69,7 +81,6 @@ interface RequestDisplay {
   name: string;
   initials: string;
   color: string;
-  mutuals: number;
 }
 
 function Avatar({
@@ -85,10 +96,10 @@ function Avatar({
     <div
       className={
         size === "lg"
-          ? "flex h-20 w-20 items-center justify-center rounded-full text-xl font-semibold text-white"
-          : "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+          ? "flex h-20 w-20 items-center justify-center rounded-full text-xl font-semibold text-white shadow-md ring-4 ring-white dark:ring-slate-800"
+          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-sm"
       }
-      style={{ background: color }}
+      style={{ background: `linear-gradient(135deg, ${color} 0%, #1E3A5F 100%)` }}
     >
       {initials}
     </div>
@@ -106,8 +117,11 @@ export default function FriendsScreen() {
   const [selectedFriend, setSelectedFriend] = useState<FriendDisplay | null>(
     null,
   );
-  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [friendFilter, setFriendFilter] = useState("");
+  const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PrivacySettings>({
     mood: true,
     trends: true,
@@ -132,24 +146,26 @@ export default function FriendsScreen() {
       setPendingRequests(pendingData);
 
       setFriends(
-        friendsData.map((user) => ({
-          id: user.id,
-          name: user.username,
-          initials: user.username.slice(0, 2).toUpperCase(),
-          color: "#1E3A5F",
-          match: Math.floor(Math.random() * 25) + 75,
-          mood: user.last_mood || "Focused",
-          moodColor: "#085041",
-          mutual: true,
-        })),
+        friendsData.map((user) => {
+          const moodKey = (user.last_mood || "focused").toLowerCase().split(",")[0].trim();
+          return {
+            id: user.id,
+            name: formatUsername(user.username),
+            initials: user.username.slice(0, 2).toUpperCase(),
+            color: "#378ADD",
+            match: moodMatchPercent(user.id),
+            mood: formatMoodLabel(user.last_mood) || "No check-in",
+            moodColor: MOOD_COLORS[moodKey] || "#378ADD",
+            mutual: true,
+          };
+        }),
       );
       setRequests(
         requestsData.map((user) => ({
           id: user.id,
-          name: user.username,
+          name: formatUsername(user.username),
           initials: user.username.slice(0, 2).toUpperCase(),
-          color: "#378ADD",
-          mutuals: 0,
+          color: "#7F77DD",
         })),
       );
     } catch (err) {
@@ -180,18 +196,39 @@ export default function FriendsScreen() {
   }
 
   const accept = async (req: RequestDisplay) => {
+    setActionLoading(`accept-${req.id}`);
     try {
       await acceptFriendRequest(req.id);
       setRequests((prev) => prev.filter((r) => r.id !== req.id));
-      loadFriends();
+      await loadFriends();
+      notice.success("Friend added", `You and ${req.name} are now connected.`);
     } catch (err) {
       console.error(err);
-      notice.error("Couldn’t accept request", "Please try again.");
+      notice.error("Couldn't accept request", "Please try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSearch = async (value: string) => {
+    setSearchQuery(value);
+    if (value.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const users = await searchUsers(value);
+      setSearchResults(users);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearching(false);
     }
   };
 
   const filtered = friends.filter((f) =>
-    f.name.toLowerCase().includes(search.toLowerCase()),
+    f.name.toLowerCase().includes(friendFilter.toLowerCase()),
   );
 
   if (loading) {
@@ -201,7 +238,7 @@ export default function FriendsScreen() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F77DD] to-navy text-white shadow-sm">
           <Users className="h-5 w-5" />
         </span>
         <div>
@@ -214,76 +251,88 @@ export default function FriendsScreen() {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Search username…"
-          value={search}
-          onChange={async (e) => {
-            const value = e.target.value;
-            setSearch(value);
-            if (value.length < 2) {
-              setSearchResults([]);
-              return;
-            }
-            try {
-              const users = await searchUsers(value);
-              setSearchResults(users);
-            } catch (err) {
-              console.error(err);
-            }
-          }}
-        />
-      </div>
+      <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#f0f9ff] dark:from-slate-800 dark:to-slate-900">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UserPlus className="h-4 w-4 text-[#378ADD]" />
+            Find friends
+          </CardTitle>
+          <CardDescription>Search by username to send a request</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="border-line/80 bg-white/80 pl-9 dark:bg-slate-900/60"
+              placeholder="Search username…"
+              value={searchQuery}
+              onChange={(e) => void handleSearch(e.target.value)}
+            />
+            {searching && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
+          </div>
 
-      {searchResults.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Search results</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {searchResults.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center gap-3 rounded-lg border border-border/70 p-3"
-              >
-                <Avatar
-                  initials={user.username.slice(0, 2).toUpperCase()}
-                  color="#378ADD"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{user.username}</p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await sendFriendRequest(user.username);
-                      notice.success(
-                        "Friend request sent",
-                        `We notified ${user.username}.`,
-                      );
-                      setSearch("");
-                      setSearchResults([]);
-                    } catch {
-                      notice.error(
-                        "Unable to send request",
-                        "Check the username and try again.",
-                      );
-                    }
-                  }}
+          {searchResults.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {searchResults.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-3 rounded-xl border border-[#378ADD]/20 bg-white/80 p-3 shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
                 >
-                  Add
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+                  <Avatar
+                    initials={user.username.slice(0, 2).toUpperCase()}
+                    color="#378ADD"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-navy dark:text-slate-100">
+                      {formatUsername(user.username)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">@{user.username}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={actionLoading === `add-${user.id}`}
+                    className="bg-gradient-to-r from-[#378ADD] to-navy shadow-sm"
+                    onClick={async () => {
+                      setActionLoading(`add-${user.id}`);
+                      try {
+                        await sendFriendRequest(user.username);
+                        notice.success(
+                          "Friend request sent",
+                          `We notified ${formatUsername(user.username)}.`,
+                        );
+                        setSearchQuery("");
+                        setSearchResults([]);
+                        await loadFriends();
+                      } catch {
+                        notice.error(
+                          "Unable to send request",
+                          "Check the username and try again.",
+                        );
+                      } finally {
+                        setActionLoading(null);
+                      }
+                    }}
+                  >
+                    {actionLoading === `add-${user.id}` ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Add
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {pendingRequests.length > 0 && (
-        <Card>
+        <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#fef9c3] dark:from-slate-800 dark:to-slate-900">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               Pending sent
@@ -294,17 +343,19 @@ export default function FriendsScreen() {
             {pendingRequests.map((user) => (
               <div
                 key={user.id}
-                className="flex items-center gap-3 rounded-lg border border-border/70 p-3"
+                className="flex items-center gap-3 rounded-xl border border-amber-200/60 bg-white/70 p-3 dark:border-slate-600 dark:bg-slate-900/50"
               >
                 <Avatar
                   initials={user.username.slice(0, 2).toUpperCase()}
-                  color="#378ADD"
+                  color="#F7B731"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{user.username}</p>
-                  <p className="text-xs text-muted-foreground">Request pending</p>
+                  <p className="truncate font-medium">{formatUsername(user.username)}</p>
+                  <p className="text-xs text-muted-foreground">Waiting for response</p>
                 </div>
-                <Badge variant="outline">Pending</Badge>
+                <Badge variant="outline" className="border-amber-300 text-amber-700">
+                  Pending
+                </Badge>
               </div>
             ))}
           </CardContent>
@@ -312,44 +363,69 @@ export default function FriendsScreen() {
       )}
 
       {requests.length > 0 && (
-        <Card>
+        <Card className="ms-card-accent overflow-hidden border-0 bg-gradient-to-br from-[#7F77DD]/10 via-white to-[#378ADD]/10 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               Friend requests
-              <Badge variant="secondary">{requests.length}</Badge>
+              <Badge className="bg-[#7F77DD] text-white">{requests.length}</Badge>
             </CardTitle>
+            <CardDescription>People who want to connect with you</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             {requests.map((req) => (
               <div
                 key={req.id}
-                className="flex flex-wrap items-center gap-3 rounded-lg border border-border/70 p-3"
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-[#7F77DD]/25 bg-white/90 p-4 shadow-sm dark:border-slate-600 dark:bg-slate-900/70"
               >
                 <Avatar initials={req.initials} color={req.color} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{req.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {req.mutuals} mutual friend{req.mutuals !== 1 ? "s" : ""}
+                  <p className="truncate text-base font-semibold text-navy dark:text-slate-100">
+                    {req.name}
                   </p>
+                  <p className="text-xs text-muted-foreground">Wants to be your friend</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => accept(req)}>
-                    Accept
+                <div className="flex w-full gap-2 sm:w-auto">
+                  <Button
+                    size="sm"
+                    disabled={actionLoading === `accept-${req.id}`}
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm sm:flex-none"
+                    onClick={() => accept(req)}
+                  >
+                    {actionLoading === `accept-${req.id}` ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Accept
+                      </>
+                    )}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={actionLoading === `ignore-${req.id}`}
+                    className="flex-1 sm:flex-none"
                     onClick={async () => {
+                      setActionLoading(`ignore-${req.id}`);
                       try {
                         await ignoreFriendRequest(req.id);
                         setRequests((r) => r.filter((x) => x.id !== req.id));
                       } catch (err) {
                         console.error(err);
-                        notice.error("Couldn’t ignore request", "Please try again.");
+                        notice.error("Couldn't ignore request", "Please try again.");
+                      } finally {
+                        setActionLoading(null);
                       }
                     }}
                   >
-                    Ignore
+                    {actionLoading === `ignore-${req.id}` ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <X className="h-3.5 w-3.5" />
+                        Ignore
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -358,7 +434,7 @@ export default function FriendsScreen() {
         </Card>
       )}
 
-      <Card>
+      <Card className="ms-card-accent border-0 bg-white dark:bg-slate-800/80">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Users className="h-4 w-4 text-navy" />
@@ -366,35 +442,54 @@ export default function FriendsScreen() {
             <Badge variant="secondary">{friends.length}</Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-3">
+          {friends.length > 3 && (
+            <Input
+              placeholder="Filter your friends…"
+              value={friendFilter}
+              onChange={(e) => setFriendFilter(e.target.value)}
+              className="h-9"
+            />
+          )}
           {filtered.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              No friends found
+              {friends.length === 0
+                ? "No friends yet — search above to add someone."
+                : "No friends match your filter."}
             </p>
           )}
           {filtered.map((f) => (
             <button
               key={f.id}
               type="button"
-              className="flex w-full items-center gap-3 rounded-lg border border-border/70 p-3 text-left transition hover:bg-muted/50"
+              className="flex w-full items-center gap-3 rounded-xl border border-line/70 bg-gradient-to-r from-white to-[#f8fafc] p-3 text-left transition hover:border-[#378ADD]/30 hover:shadow-sm dark:border-slate-700 dark:from-slate-900 dark:to-slate-800"
               onClick={() => setSelectedFriend(f)}
             >
               <Avatar initials={f.initials} color={f.color} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{f.name}</p>
+                <p className="truncate font-semibold text-navy dark:text-slate-100">
+                  {f.name}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {f.match
-                    ? `${f.match}% mood match`
-                    : "Awaiting follow-back"}
+                  {f.match}% mood match
                 </p>
               </div>
-              <Badge variant="outline">{f.mood}</Badge>
+              <Badge
+                variant="outline"
+                style={{
+                  borderColor: `${f.moodColor}55`,
+                  color: f.moodColor,
+                  backgroundColor: `${f.moodColor}12`,
+                }}
+              >
+                {f.mood}
+              </Badge>
             </button>
           ))}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#eef2ff] dark:from-slate-800 dark:to-slate-900">
         <CardHeader>
           <CardTitle className="text-base">Privacy controls</CardTitle>
           <CardDescription>
@@ -405,7 +500,7 @@ export default function FriendsScreen() {
           {PRIVACY.map((p) => (
             <div
               key={p.key}
-              className="flex items-center justify-between gap-3"
+              className="flex items-center justify-between gap-3 rounded-lg border border-line/60 bg-white/60 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40"
             >
               <Label htmlFor={`privacy-${p.key}`} className="font-normal">
                 {p.label}
@@ -426,7 +521,7 @@ export default function FriendsScreen() {
                     });
                   } catch (err) {
                     console.error(err);
-                    notice.error("Couldn’t save settings", "Your privacy toggles were not updated.");
+                    notice.error("Couldn't save settings", "Your privacy toggles were not updated.");
                   }
                 }}
               />
@@ -445,7 +540,7 @@ export default function FriendsScreen() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="border-0 bg-gradient-to-br from-white to-[#f0f9ff] sm:max-w-md dark:from-slate-900 dark:to-slate-800">
           {selectedFriend && (
             <>
               <DialogHeader className="items-center text-center">
@@ -457,20 +552,25 @@ export default function FriendsScreen() {
                 <DialogTitle className="pt-2">{selectedFriend.name}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between border-b border-border/70 py-2">
+                <div className="flex justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-900/50">
                   <span className="text-muted-foreground">Current mood</span>
-                  <strong>{selectedFriend.mood}</strong>
+                  <strong style={{ color: selectedFriend.moodColor }}>
+                    {selectedFriend.mood}
+                  </strong>
                 </div>
-                <div className="flex justify-between border-b border-border/70 py-2">
+                <div className="flex justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-900/50">
                   <span className="text-muted-foreground">Mood match</span>
-                  <strong>{selectedFriend.match}%</strong>
+                  <strong className="text-[#378ADD]">{selectedFriend.match}%</strong>
                 </div>
-                <div className="flex justify-between border-b border-border/70 py-2">
+                <div className="flex justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-900/50">
                   <span className="text-muted-foreground">Status</span>
-                  <strong>Mutual friend</strong>
+                  <strong className="text-emerald-600">Mutual friend</strong>
                 </div>
               </div>
-              <Button onClick={() => openMoodTrend(selectedFriend)}>
+              <Button
+                onClick={() => openMoodTrend(selectedFriend)}
+                className="bg-gradient-to-r from-navy to-[#378ADD]"
+              >
                 View mood trends
               </Button>
               {showTrend && trendData.length > 0 && (

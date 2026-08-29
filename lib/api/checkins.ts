@@ -9,7 +9,7 @@ export interface Checkin {
 }
 
 interface CreateCheckinData {
-  mood: string;
+  moods: string[];
   note: string;
   shareWithFriends: boolean;
 }
@@ -20,6 +20,7 @@ export async function getCheckins(): Promise<{ checkins: Checkin[] }> {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
+  if (!res.ok) throw new Error("Failed to fetch check-ins");
   return res.json();
 }
 
@@ -32,7 +33,11 @@ export async function createCheckin(data: CreateCheckinData): Promise<unknown> {
     },
     body: JSON.stringify(data),
   });
-  return res.json();
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body.error || "Failed to save check-in");
+  }
+  return body;
 }
 
 export async function getLatestCheckin(): Promise<{ checkin: Checkin | null }> {

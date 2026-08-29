@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,7 +39,11 @@ const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 interface CheckInModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (mood: string, note: string, shareWithFriends: boolean) => void;
+  onSave: (
+    moods: string[],
+    note: string,
+    shareWithFriends: boolean,
+  ) => Promise<void>;
   checkins: boolean[];
 }
 
@@ -48,48 +53,93 @@ export default function CheckInModal({
   onSave,
   checkins,
 }: CheckInModalProps) {
-  const [selected, setSelected] = useState<MoodOption | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [share, setShare] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    if (!selected) return;
-    onSave(selected.name, note, share);
-    setSelected(null);
-    setNote("");
-    setShare(false);
+  useEffect(() => {
+    if (!open) {
+      setSelected([]);
+      setNote("");
+      setShare(false);
+      setSaving(false);
+    }
+  }, [open]);
+
+  const toggleMood = (name: string) => {
+    setSelected((prev) =>
+      prev.includes(name) ? prev.filter((m) => m !== name) : [...prev, name],
+    );
+  };
+
+  const handleSave = async () => {
+    if (selected.length === 0 || saving) return;
+    setSaving(true);
+    try {
+      await onSave(selected, note, share);
+      onOpenChange(false);
+    } catch {
+      // Parent shows error notice; keep modal open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   const count = checkins.filter(Boolean).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[90vh] overflow-y-auto border-0 bg-gradient-to-br from-white via-[#f0f9ff] to-[#e9eef5] sm:max-w-md dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <DialogHeader>
-          <DialogTitle>How are you feeling?</DialogTitle>
+          <DialogTitle className="text-navy dark:text-slate-100">
+            How are you feeling?
+          </DialogTitle>
           <DialogDescription>
-            This check-in trains your personal mood model.
+            Select one or more moods — this trains your personal mood model.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-4 gap-2">
-          {MOODS.map((m) => (
-            <button
-              key={m.name}
-              type="button"
-              onClick={() => setSelected(m)}
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-xl border p-3 text-xs transition-all",
-                selected?.name === m.name
-                  ? "border-navy bg-[#E9EEF5] shadow-sm ring-2 ring-navy/20 dark:bg-slate-800"
-                  : "border-line hover:bg-[#F4F6FA] dark:border-slate-700 dark:hover:bg-slate-800",
-              )}
-            >
-              <span className="text-xl">{m.emoji}</span>
-              <span className="font-medium">{m.name}</span>
-            </button>
-          ))}
+          {MOODS.map((m) => {
+            const isSelected = selected.includes(m.name);
+            return (
+              <button
+                key={m.name}
+                type="button"
+                onClick={() => toggleMood(m.name)}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-xl border p-3 text-xs transition-all",
+                  isSelected
+                    ? "border-transparent shadow-md ring-2 ring-offset-1"
+                    : "border-line hover:bg-white/80 dark:border-slate-700 dark:hover:bg-slate-800",
+                )}
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: `${m.color}22`,
+                        borderColor: m.color,
+                        boxShadow: `0 0 0 2px ${m.color}44`,
+                      }
+                    : undefined
+                }
+              >
+                <span className="text-xl">{m.emoji}</span>
+                <span className="font-medium">{m.name}</span>
+              </button>
+            );
+          })}
         </div>
+
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selected.map((name) => (
+              <Badge key={name} variant="secondary" className="bg-navy/10 text-navy">
+                {name}
+              </Badge>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="note">Note (optional)</Label>
@@ -102,7 +152,7 @@ export default function CheckInModal({
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+        <div className="flex items-center justify-between rounded-lg border border-line/80 bg-white/60 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
           <div>
             <p className="text-sm font-medium">Share with friends</p>
             <p className="text-xs text-muted-foreground">
@@ -123,8 +173,8 @@ export default function CheckInModal({
               className={cn(
                 "flex h-8 flex-1 items-center justify-center rounded-md text-xs font-medium",
                 checkins[i]
-                  ? "bg-navy text-white"
-                  : "bg-[#F4F6FA] text-slate-400 dark:bg-slate-700 dark:text-slate-400",
+                  ? "bg-gradient-to-br from-navy to-navy-mid text-white shadow-sm"
+                  : "bg-white/70 text-slate-400 dark:bg-slate-700 dark:text-slate-400",
               )}
             >
               {d}
@@ -133,11 +183,22 @@ export default function CheckInModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!selected}>
-            Save check-in
+          <Button onClick={handleSave} disabled={selected.length === 0 || saving}>
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save check-in"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

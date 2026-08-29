@@ -17,31 +17,43 @@ import { createCheckin, getCheckins, getLatestCheckin } from "@/lib/api/checkins
 import type { Checkin } from "@/lib/api/checkins";
 import { BrandLoader } from "@/components/Loaders";
 
-const CHECKIN_PROMPT_GAP_HOURS = 6;
-
 type ScreenId = "today" | "forecast" | "friends" | "insights" | "recs";
+
+function getStartOfWeek(date = new Date()): Date {
+  const start = new Date(date);
+  const day = start.getDay();
+  start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
 
 function mapCheckinsToWeek(checkins: Checkin[]): boolean[] {
   const week = [false, false, false, false, false, false, false];
+  const startOfWeek = getStartOfWeek();
+
   checkins.forEach((c) => {
-    const day = new Date(c.created_at).getDay();
-    const idx = day === 0 ? 6 : day - 1;
-    week[idx] = true;
+    const checkinDate = new Date(c.created_at);
+    if (checkinDate >= startOfWeek) {
+      const day = checkinDate.getDay();
+      const idx = day === 0 ? 6 : day - 1;
+      week[idx] = true;
+    }
   });
   return week;
 }
 
 function shouldPromptCheckIn(latestCheckin: Checkin | null): boolean {
   if (!latestCheckin) return true;
-  const hoursSinceLast =
-    (Date.now() - new Date(latestCheckin.created_at).getTime()) / 3600000;
-  return hoursSinceLast >= CHECKIN_PROMPT_GAP_HOURS;
+  const lastDate = new Date(latestCheckin.created_at);
+  const today = new Date();
+  return lastDate.toDateString() !== today.toDateString();
 }
 
 function MoodSyncShell() {
   const notice = useNotice();
   const [activeScreen, setActiveScreen] = useState<ScreenId>("today");
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkInPrompted, setCheckInPrompted] = useState(false);
   const [checkins, setCheckins] = useState<boolean[]>([
     false,
     false,
@@ -66,20 +78,27 @@ function MoodSyncShell() {
   };
 
   const handleCheckinSave = async (
-    mood: string,
+    moods: string[],
     note: string,
     shareWithFriends: boolean,
   ) => {
     try {
-      await createCheckin({ mood, note, shareWithFriends });
+      await createCheckin({ moods, note, shareWithFriends });
       const data = await getCheckins();
       setCheckins(mapCheckinsToWeek(data.checkins));
       const latest = await getLatestCheckin();
       setLatestCheckin(latest.checkin);
       setCheckInOpen(false);
+      notice.success(
+        "Check-in saved",
+        moods.length > 1
+          ? `Logged ${moods.join(", ")} for today.`
+          : `Logged ${moods[0]} for today.`,
+      );
     } catch (err) {
       console.error(err);
       notice.error("Check-in failed", "Please try again in a moment.");
+      throw err;
     }
   };
 
@@ -124,10 +143,13 @@ function MoodSyncShell() {
     getLatestCheckin()
       .then((data) => {
         setLatestCheckin(data.checkin);
-        if (shouldPromptCheckIn(data.checkin)) setCheckInOpen(true);
+        if (!checkInPrompted && shouldPromptCheckIn(data.checkin)) {
+          setCheckInOpen(true);
+          setCheckInPrompted(true);
+        }
       })
       .catch((err) => console.error("Failed to load latest checkin:", err));
-  }, [isLoggedIn]);
+  }, [isLoggedIn, checkInPrompted]);
 
   if (!authReady) {
     return <BrandLoader message="Loading MoodSync…" />;
@@ -139,7 +161,7 @@ function MoodSyncShell() {
 
   return (
     <div className="ms-canvas relative min-h-dvh">
-      <header className="sticky top-0 z-30 bg-[#F7F8FA]/70 px-4 py-3 backdrop-blur-sm md:px-6 md:py-4 dark:bg-gray-900/70">
+      <header className="sticky top-0 z-30 border-b border-line/60 bg-white/75 px-4 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-slate-700/60 dark:bg-slate-900/75">
         <TopBar user={user} onCheckIn={() => setCheckInOpen(true)} />
       </header>
 

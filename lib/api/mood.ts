@@ -3,6 +3,10 @@ import { API_URL } from "./config";
 export interface MoodSyncData {
   error?: string;
   moodScore?: number;
+  integrations?: {
+    spotify: boolean;
+    googleFit: boolean;
+  };
   track?: {
     name: string;
     artist: string;

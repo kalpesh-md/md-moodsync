@@ -31,6 +31,8 @@
     --ms-mid: #2d5a8b;
     --ms-sky: #f0f9ff;
     --ms-blue: #378add;
+    --ms-teal: #4ecdc4;
+    --ms-purple: #7f77dd;
     --ms-line: #e5e8ee;
     --ms-ink: #0f172a;
   }
@@ -77,13 +79,24 @@
 
 .ms-canvas {
   background:
-    radial-gradient(1200px 600px at 100% -10%, #f0f9ff 0%, rgba(240, 249, 255, 0) 60%),
-    #f7f8fa;
+    radial-gradient(900px 500px at 0% -5%, rgba(55, 138, 221, 0.12) 0%, transparent 55%),
+    radial-gradient(700px 400px at 100% 0%, rgba(78, 205, 196, 0.1) 0%, transparent 50%),
+    radial-gradient(600px 350px at 50% 100%, rgba(127, 119, 221, 0.08) 0%, transparent 55%),
+    linear-gradient(180deg, #f7f8fa 0%, #eef2ff 100%);
   background-attachment: fixed;
 }
 .dark .ms-canvas {
-  background: linear-gradient(135deg, #111827 0%, #1f2937 50%, #111827 100%);
+  background:
+    radial-gradient(900px 500px at 0% -5%, rgba(55, 138, 221, 0.15) 0%, transparent 55%),
+    radial-gradient(700px 400px at 100% 0%, rgba(78, 205, 196, 0.08) 0%, transparent 50%),
+    linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   background-attachment: fixed;
+}
+
+@layer components {
+  .ms-card-accent {
+    @apply shadow-card transition-shadow hover:shadow-lift;
+  }
 }
 
 /* Mood clock (scoped; not the old global dark theme) */

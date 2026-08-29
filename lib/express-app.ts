@@ -187,17 +187,11 @@ async function authRequired(req, res, next) {
 
 app.get("/api/auth/me", authRequired, async (req, res) => {
   try {
-    const db = getSupabaseAdmin();
-    const { data, error } = await db
-      .from("moodsync_profiles")
-      .select(
-        "user_id, username, share_mood, share_trends, share_ocean, share_music, share_fitness",
-      )
-      .eq("user_id", req.user.userId)
-      .maybeSingle();
-
-    if (error) throw error;
-    res.json({ user: profileAsUser(data, req.user.email) });
+    const profile = await ensureMoodSyncProfile(
+      req.user.userId,
+      req.user.email ?? null,
+    );
+    res.json({ user: profileAsUser(profile, req.user.email) });
   } catch (err) {
     console.error("auth/me error:", err.message);
     res.status(500).json({ error: "Server error" });
@@ -305,6 +299,21 @@ app.get("/api/spotify/callback", async (req, res) => {
     .eq("user_id", userId);
 
   res.redirect(`${clientOrigin}/?connected=spotify`);
+});
+
+app.get("/api/integrations/status", authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  const db = getSupabaseAdmin();
+  const { data: user } = await db
+    .from("moodsync_profiles")
+    .select("spotify_access_token, google_access_token")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  res.json({
+    spotify: { connected: Boolean(user?.spotify_access_token) },
+    googleFit: { connected: Boolean(user?.google_access_token) },
+  });
 });
 
 app.get("/api/spotify/status", authRequired, async (req, res) => {
@@ -524,6 +533,10 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
 
   res.json({
     moodScore,
+    integrations: {
+      spotify: Boolean(user.spotify_access_token),
+      googleFit: Boolean(user.google_access_token),
+    },
     track: {
       name: trackName,
       artist: artistName,
@@ -561,15 +574,25 @@ app.get("/api/mood/snapshots", authRequired, async (req, res) => {
 // ============================================
 
 app.post("/api/checkins", authRequired, async (req, res) => {
-  const { mood, note, shareWithFriends } = req.body;
+  const { mood, moods, note, shareWithFriends } = req.body;
   const db = getSupabaseAdmin();
+  const moodList = Array.isArray(moods)
+    ? moods
+    : mood
+      ? [mood]
+      : [];
+  const moodLabel = moodList.map(toMoodEnum).filter(Boolean).join(", ");
+
+  if (!moodLabel) {
+    return res.status(400).json({ error: "At least one mood is required" });
+  }
 
   try {
     const { data, error } = await db
       .from("mood_checkins")
       .insert({
         user_id: req.user.userId,
-        mood_label: toMoodEnum(mood),
+        mood_label: moodLabel,
         note,
         share_with_friends: shareWithFriends,
       })
@@ -1374,17 +1397,32 @@ function moodLabelToScore(label) {
   return map[label] ?? map[String(label || "").toLowerCase()] ?? 50;
 }
 
+function moodsLabelToScore(label) {
+  if (!label) return null;
+  const parts = String(label)
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const scores = parts.map((part) => moodLabelToScore(part));
+  return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+}
+
 function computeMoodScore({ moodLabel, trackPopularity, steps }) {
   const components = [];
 
-  if (moodLabel) {
-    components.push({ value: moodLabelToScore(moodLabel), weight: 0.5 });
+  const moodScore = moodsLabelToScore(moodLabel);
+  if (moodScore != null) {
+    components.push({ value: moodScore, weight: 0.5 });
   }
   if (typeof trackPopularity === "number") {
     components.push({ value: trackPopularity, weight: 0.2 });
   }
-  if (typeof steps === "number") {
-    components.push({ value: Math.min(steps / 10000, 1) * 100, weight: 0.2 });
+  if (typeof steps === "number" && steps > 0) {
+    components.push({
+      value: Math.round(Math.min(steps / 10000, 1) * 100),
+      weight: 0.2,
+    });
   }
 
   if (components.length === 0) return 50;
