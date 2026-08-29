@@ -19,7 +19,6 @@ import {
   useCheckins,
   useInvalidateCheckins,
   useLatestCheckin,
-  useMe,
   usePrefetchAppData,
   queryKeys,
 } from "@/lib/hooks/queries";
@@ -76,7 +75,6 @@ function MoodSyncShell() {
   const [authReady, setAuthReady] = useState(false);
   const shownConnectNotice = useRef(false);
 
-  const { data: user = null } = useMe(isLoggedIn);
   const { data: checkinsList = [] } = useCheckins(isLoggedIn);
   const { data: latestCheckin = null } = useLatestCheckin(isLoggedIn);
 
@@ -102,8 +100,8 @@ function MoodSyncShell() {
   ) => {
     try {
       await createCheckin({ moods, note, shareWithFriends });
-      await invalidateCheckins();
       setCheckInOpen(false);
+      invalidateCheckins();
       notice.success(
         "Check-in saved",
         moods.length > 1
@@ -112,7 +110,10 @@ function MoodSyncShell() {
       );
     } catch (err) {
       console.error(err);
-      notice.error("Check-in failed", "Please try again in a moment.");
+      notice.error(
+        "Check-in failed",
+        err instanceof Error ? err.message : "Please try again in a moment.",
+      );
       throw err;
     }
   };
@@ -168,7 +169,7 @@ function MoodSyncShell() {
   return (
     <div className="ms-canvas relative min-h-dvh">
       <header className="sticky top-0 z-30 border-b border-line/60 bg-white/75 px-4 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-slate-700/60 dark:bg-slate-900/75">
-        <TopBar user={user} onCheckIn={() => setCheckInOpen(true)} />
+        <TopBar onCheckIn={() => setCheckInOpen(true)} />
       </header>
 
       <div className="flex items-start gap-5 px-4 pb-24 md:gap-6 md:px-6 md:pb-12">

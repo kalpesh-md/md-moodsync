@@ -27,9 +27,12 @@ const sharedQueryOptions = {
 export function useMe(enabled = true) {
   return useQuery({
     queryKey: queryKeys.me,
-    queryFn: getMe,
+    queryFn: async () => {
+      const res = await getMe();
+      if (!res.user) throw new Error("User not found");
+      return res.user;
+    },
     enabled,
-    select: (data) => data.user,
     staleTime: 5 * 60 * 1000,
     ...sharedQueryOptions,
   });
@@ -131,11 +134,10 @@ export function usePrefetchAppData(enabled = true) {
 
 export function useInvalidateCheckins() {
   const queryClient = useQueryClient();
-  return async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.checkins }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.latestCheckin }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.moodSync }),
-    ]);
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.checkins });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.latestCheckin });
+    // Refresh mood score in background — don't block check-in save UI.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
   };
 }

@@ -5,6 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Raw username for display/copy (friends search uses this value). */
+export function getCopyableUsername(
+  username?: string | null,
+  email?: string | null,
+): string | null {
+  if (username?.trim()) return username.trim();
+  const prefix = email?.split("@")[0]?.trim();
+  return prefix || null;
+}
+
 /** Consistent username display across all screens. */
 export function formatUsername(
   username?: string | null,

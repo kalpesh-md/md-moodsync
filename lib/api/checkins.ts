@@ -27,19 +27,32 @@ export async function getCheckins(): Promise<{ checkins: Checkin[] }> {
 }
 
 export async function createCheckin(data: CreateCheckinData): Promise<unknown> {
-  const res = await fetch(`${API_URL}/checkins`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) {
-    throw new Error(body.error || "Failed to save check-in");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const res = await fetch(`${API_URL}/checkins`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body.error || "Failed to save check-in");
+    }
+    return body;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Save timed out — please try again");
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return body;
 }
 
 export async function getLatestCheckin(): Promise<{ checkin: Checkin | null }> {

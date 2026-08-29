@@ -660,22 +660,14 @@ app.post("/api/checkins", authRequired, async (req, res) => {
   };
 
   try {
-    let result = await db
+    const { data, error } = await db
       .from("mood_checkins")
-      .insert({ ...payload, mood_labels: normalizedMoods })
+      .insert(payload)
       .select("*")
       .single();
 
-    if (result.error?.message?.includes("mood_labels")) {
-      result = await db
-        .from("mood_checkins")
-        .insert(payload)
-        .select("*")
-        .single();
-    }
-
-    if (result.error) throw result.error;
-    res.json({ checkin: enrichCheckin(result.data) });
+    if (error) throw error;
+    res.json({ checkin: enrichCheckin(data) });
   } catch (err) {
     console.error("checkin save error:", err.message);
     res.status(500).json({ error: "Failed to save checkin" });

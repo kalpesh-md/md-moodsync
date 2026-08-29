@@ -78,9 +78,8 @@ export default function CheckInModal({
     setSaving(true);
     try {
       await onSave(selected, note, share);
-      onOpenChange(false);
-    } catch {
-      // Parent shows error notice; keep modal open for retry.
+    } catch (err) {
+      console.error("Check-in save failed:", err);
     } finally {
       setSaving(false);
     }
