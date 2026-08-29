@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   Download,
@@ -13,10 +13,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import MoodClock from "@/components/MoodClock";
-import { InlineLoader } from "@/components/Loaders";
+import { TodayPageSkeleton } from "@/components/Skeletons";
 import { useNotice } from "@/components/notice-provider";
-import { syncMood } from "@/lib/api/mood";
-import type { MoodSyncData } from "@/lib/api/mood";
 import { connectSpotify } from "@/lib/api/spotify";
 import { connectGoogleFit } from "@/lib/api/googlefit";
 import type { Checkin } from "@/lib/api/checkins";
@@ -31,6 +29,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatMoodLabel } from "@/lib/utils";
+import { queryKeys, useMoodSync } from "@/lib/hooks/queries";
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const CIRC = 2 * Math.PI * 44;
@@ -96,35 +95,21 @@ interface TodayScreenProps {
 
 export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   const notice = useNotice();
-  const [syncData, setSyncData] = useState<MoodSyncData | null>(null);
-  const [syncing, setSyncing] = useState(true);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: syncData, isPending, isFetching, isError } = useMoodSync();
   const count = checkins.filter(Boolean).length;
   const moodScore = syncData?.moodScore ?? null;
   const spotifyConnected = syncData?.integrations?.spotify ?? false;
   const fitConnected = syncData?.integrations?.googleFit ?? false;
+  const syncing = isFetching;
+  const showSkeleton = isPending && !syncData;
 
-  useEffect(() => {
-    void handleSync(true);
-    const interval = setInterval(() => {
-      void handleSync(false);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleSync = async (isInitial = false) => {
-    setSyncing(true);
+  const handleSync = async () => {
     try {
-      const res = await syncMood();
-      if (!res.error) setSyncData(res);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
     } catch (err) {
       console.log("Sync failed:", err);
-      if (isInitial) {
-        notice.error("Sync failed", "Could not load your mood data. Tap Sync to retry.");
-      }
-    } finally {
-      setSyncing(false);
-      if (isInitial) setInitialLoad(false);
+      notice.error("Sync failed", "Could not refresh your mood data. Please try again.");
     }
   };
 
@@ -208,8 +193,19 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     },
   ];
 
-  if (initialLoad && syncing) {
-    return <InlineLoader message="Calculating your mood score…" />;
+  if (showSkeleton) {
+    return <TodayPageSkeleton />;
+  }
+
+  if (isError && !syncData) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+        <p className="text-sm text-muted-foreground">Could not load mood data.</p>
+        <Button size="sm" onClick={() => void handleSync()}>
+          Retry
+        </Button>
+      </div>
+    );
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import TodayScreen from "@/screens/TodayScreen";
 import ForecastScreen from "@/screens/ForecastScreen";
 import FriendsScreen from "@/screens/FriendsScreen";
@@ -11,13 +11,29 @@ import NavBar from "@/components/NavBar";
 import TopBar from "@/components/TopBar";
 import Login from "@/components/Login";
 import { NoticeProvider, useNotice } from "@/components/notice-provider";
-import { getMe } from "@/lib/api/user";
-import type { User } from "@/lib/api/user";
-import { createCheckin, getCheckins, getLatestCheckin } from "@/lib/api/checkins";
+import { QueryProvider } from "@/components/query-provider";
+import { createCheckin } from "@/lib/api/checkins";
 import type { Checkin } from "@/lib/api/checkins";
 import { BrandLoader } from "@/components/Loaders";
+import {
+  useCheckins,
+  useInvalidateCheckins,
+  useLatestCheckin,
+  useMe,
+  usePrefetchAppData,
+  queryKeys,
+} from "@/lib/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
 
 type ScreenId = "today" | "forecast" | "friends" | "insights" | "recs";
+
+const SCREEN_IDS: ScreenId[] = [
+  "today",
+  "forecast",
+  "friends",
+  "insights",
+  "recs",
+];
 
 function getStartOfWeek(date = new Date()): Date {
   const start = new Date(date);
@@ -51,23 +67,25 @@ function shouldPromptCheckIn(latestCheckin: Checkin | null): boolean {
 
 function MoodSyncShell() {
   const notice = useNotice();
+  const queryClient = useQueryClient();
+  const invalidateCheckins = useInvalidateCheckins();
   const [activeScreen, setActiveScreen] = useState<ScreenId>("today");
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkInPrompted, setCheckInPrompted] = useState(false);
-  const [checkins, setCheckins] = useState<boolean[]>([
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-  ]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [latestCheckin, setLatestCheckin] = useState<Checkin | null>(null);
   const shownConnectNotice = useRef(false);
+
+  const { data: user = null } = useMe(isLoggedIn);
+  const { data: checkinsList = [] } = useCheckins(isLoggedIn);
+  const { data: latestCheckin = null } = useLatestCheckin(isLoggedIn);
+
+  usePrefetchAppData(isLoggedIn);
+
+  const checkins = useMemo(
+    () => mapCheckinsToWeek(checkinsList),
+    [checkinsList],
+  );
 
   const screens: Record<ScreenId, React.ReactNode> = {
     today: <TodayScreen checkins={checkins} latest={latestCheckin} />,
@@ -84,10 +102,7 @@ function MoodSyncShell() {
   ) => {
     try {
       await createCheckin({ moods, note, shareWithFriends });
-      const data = await getCheckins();
-      setCheckins(mapCheckinsToWeek(data.checkins));
-      const latest = await getLatestCheckin();
-      setLatestCheckin(latest.checkin);
+      await invalidateCheckins();
       setCheckInOpen(false);
       notice.success(
         "Check-in saved",
@@ -113,6 +128,9 @@ function MoodSyncShell() {
     const connected = params.get("connected");
     if (connected === "spotify") {
       shownConnectNotice.current = true;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.recs });
       notice.success(
         "Spotify connected",
         "Your listening will now feed into your mood score.",
@@ -121,6 +139,8 @@ function MoodSyncShell() {
     }
     if (connected === "googlefit") {
       shownConnectNotice.current = true;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
       notice.success(
         "Google Fit connected",
         "Sleep and steps will now sync into your snapshot.",
@@ -130,26 +150,12 @@ function MoodSyncShell() {
   }, [notice]);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
-
-    getMe()
-      .then((data) => setUser(data.user))
-      .catch((err) => console.error("Failed to load user:", err));
-
-    getCheckins()
-      .then((data) => setCheckins(mapCheckinsToWeek(data.checkins)))
-      .catch((err) => console.error("Failed to load checkins:", err));
-
-    getLatestCheckin()
-      .then((data) => {
-        setLatestCheckin(data.checkin);
-        if (!checkInPrompted && shouldPromptCheckIn(data.checkin)) {
-          setCheckInOpen(true);
-          setCheckInPrompted(true);
-        }
-      })
-      .catch((err) => console.error("Failed to load latest checkin:", err));
-  }, [isLoggedIn, checkInPrompted]);
+    if (!isLoggedIn || checkInPrompted) return;
+    if (latestCheckin !== undefined && shouldPromptCheckIn(latestCheckin)) {
+      setCheckInOpen(true);
+      setCheckInPrompted(true);
+    }
+  }, [isLoggedIn, latestCheckin, checkInPrompted]);
 
   if (!authReady) {
     return <BrandLoader message="Loading MoodSync…" />;
@@ -170,7 +176,11 @@ function MoodSyncShell() {
           <NavBar variant="desktop" active={activeScreen} onChange={setActiveScreen} />
         </aside>
         <main className="min-h-[calc(100dvh-96px)] min-w-0 flex-1">
-          {screens[activeScreen]}
+          {SCREEN_IDS.map((id) => (
+            <div key={id} className={activeScreen === id ? "block" : "hidden"}>
+              {screens[id]}
+            </div>
+          ))}
         </main>
       </div>
       <NavBar variant="mobile" active={activeScreen} onChange={setActiveScreen} />
@@ -187,8 +197,10 @@ function MoodSyncShell() {
 
 export default function MoodSyncApp() {
   return (
-    <NoticeProvider>
-      <MoodSyncShell />
-    </NoticeProvider>
+    <QueryProvider>
+      <NoticeProvider>
+        <MoodSyncShell />
+      </NoticeProvider>
+    </QueryProvider>
   );
 }

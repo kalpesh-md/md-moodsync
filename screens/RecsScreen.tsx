@@ -1,60 +1,21 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Headphones, ExternalLink } from "lucide-react";
-import { InlineLoader } from "@/components/Loaders";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Headphones, ExternalLink, Music2, RefreshCw, Loader2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { RecsPageSkeleton } from "@/components/Skeletons";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-interface RecTrack {
-  id: string;
-  name: string;
-  artists?: { name: string }[];
-  album?: { images?: { url: string }[] };
-  external_urls?: { spotify?: string };
-  energy?: number;
-}
+import { connectSpotify } from "@/lib/api/spotify";
+import { useRecs } from "@/lib/hooks/queries";
 
 export default function RecsScreen() {
-  const [recommendations, setRecommendations] = useState<RecTrack[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isPending, isFetching, refetch } = useRecs();
 
-  useEffect(() => {
-    fetchRecommendations();
-  }, []);
-
-  const fetchRecommendations = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/recs", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      const data = await res.json();
-      if (data.recommendations && data.recommendations.length > 0) {
-        setRecommendations(data.recommendations);
-      } else if (data.error) {
-        setError(data.error);
-      } else {
-        setError(
-          "No recommendations available. Try playing some music on Spotify!",
-        );
-      }
-    } catch (err) {
-      console.log("Recs error:", err);
-      setError("Failed to load recommendations");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const recommendations = data?.recommendations ?? [];
+  const status = data?.status ?? "ok";
+  const message = data?.message;
+  const showSkeleton = isPending && !data;
 
   const energyLabel = (energy?: number) => {
     if (!energy) return "Track";
@@ -63,56 +24,106 @@ export default function RecsScreen() {
     return "Low energy";
   };
 
-  if (loading) {
-    return <InlineLoader message="Finding your perfect tracks…" />;
+  if (showSkeleton) {
+    return <RecsPageSkeleton />;
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9EEF5] text-navy dark:bg-slate-700 dark:text-slate-100">
-          <Headphones className="h-5 w-5" />
-        </span>
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
-            Recommended For You
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Based on your listening history
-          </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#1DB954] to-navy text-white shadow-sm">
+            <Headphones className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
+              Recommended For You
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Based on your Spotify listening history
+            </p>
+          </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+        >
+          {isFetching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Refresh
+        </Button>
       </div>
 
-      {error && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Couldn&apos;t load recs</CardTitle>
-            <CardDescription>{error}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={fetchRecommendations}>Try again</Button>
-          </CardContent>
-        </Card>
+      {status === "spotify_not_connected" && (
+        <EmptyState
+          icon={<Music2 className="h-7 w-7 text-[#1DB954]" />}
+          title="Connect Spotify to get recommendations"
+          description={
+            message ||
+            "We'll suggest tracks based on what you listen to and how you're feeling."
+          }
+          action={{ label: "Connect Spotify", onClick: connectSpotify }}
+        />
       )}
 
-      {!error && recommendations.length === 0 && (
-        <Card>
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-navy/10 text-navy">
-              <Headphones className="h-6 w-6" />
-            </div>
-            <CardTitle>No recommendations yet</CardTitle>
-            <CardDescription>
-              Listen to some music on Spotify and come back.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      {status === "no_history" && (
+        <EmptyState
+          icon={<Headphones className="h-7 w-7 text-[#378ADD]" />}
+          title="No listening history yet"
+          description={
+            message ||
+            "Play a few songs on Spotify — once we see your taste, recommendations will appear here."
+          }
+          action={{ label: "Check again", onClick: () => void refetch() }}
+          variant="muted"
+        />
+      )}
+
+      {status === "token_expired" && (
+        <EmptyState
+          icon={<Music2 className="h-7 w-7 text-amber-500" />}
+          title="Spotify session expired"
+          description={
+            message || "Reconnect Spotify to refresh your music recommendations."
+          }
+          action={{ label: "Reconnect Spotify", onClick: connectSpotify }}
+          secondaryAction={{ label: "Try again", onClick: () => void refetch() }}
+        />
+      )}
+
+      {status === "error" && recommendations.length === 0 && (
+        <EmptyState
+          icon={<Headphones className="h-7 w-7 text-slate-400" />}
+          title="Couldn't load recommendations"
+          description={
+            message || "Spotify may be temporarily unavailable. Please try again."
+          }
+          action={{ label: "Try again", onClick: () => void refetch() }}
+        />
+      )}
+
+      {status === "ok" && recommendations.length === 0 && (
+        <EmptyState
+          icon={<Headphones className="h-7 w-7 text-[#378ADD]" />}
+          title="No tracks to show yet"
+          description="Keep listening on Spotify and we'll populate this list for you."
+          action={{ label: "Refresh", onClick: () => void refetch() }}
+          variant="muted"
+        />
       )}
 
       {recommendations.length > 0 && (
         <div className="space-y-3">
           {recommendations.slice(0, 10).map((track, idx) => (
-            <Card key={track.id} className="overflow-hidden">
+            <Card
+              key={track.id}
+              className="ms-card-accent overflow-hidden border-0 bg-white dark:bg-slate-800/80"
+            >
               <CardContent className="flex items-center gap-3 p-3 sm:p-4">
                 <span className="w-6 text-center text-sm font-semibold text-muted-foreground">
                   {idx + 1}
@@ -120,12 +131,12 @@ export default function RecsScreen() {
                 {track.album?.images?.[0]?.url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    className="h-14 w-14 rounded-lg object-cover"
+                    className="h-14 w-14 rounded-lg object-cover shadow-sm"
                     src={track.album.images[0].url}
                     alt={track.name}
                   />
                 ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-navy/10 text-navy">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-gradient-to-br from-[#1DB954]/20 to-navy/10 text-navy">
                     <Headphones className="h-5 w-5" />
                   </div>
                 )}

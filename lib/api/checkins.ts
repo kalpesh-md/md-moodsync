@@ -3,6 +3,8 @@ import { API_URL } from "./config";
 export interface Checkin {
   created_at: string;
   mood_label?: string;
+  mood_labels?: string[];
+  display_note?: string;
   note?: string;
   score?: number;
   [key: string]: unknown;

@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Search, UserPlus, Users, Loader2, Check, X } from "lucide-react";
-import { InlineLoader } from "@/components/Loaders";
+import { FriendsPageSkeleton } from "@/components/Skeletons";
 import { useNotice } from "@/components/notice-provider";
 import { formatMoodLabel, formatUsername, moodMatchPercent } from "@/lib/utils";
 
@@ -232,7 +232,7 @@ export default function FriendsScreen() {
   );
 
   if (loading) {
-    return <InlineLoader message="Loading your friends…" />;
+    return <FriendsPageSkeleton />;
   }
 
   return (

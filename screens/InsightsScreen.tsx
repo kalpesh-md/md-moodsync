@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Brain } from "lucide-react";
-import { InlineLoader } from "@/components/Loaders";
+import { InsightsPageSkeleton } from "@/components/Skeletons";
 import {
   Card,
   CardContent,
@@ -97,7 +97,7 @@ export default function InsightsScreen({ checkins: _checkins }: InsightsScreenPr
   ];
 
   if (loading) {
-    return <InlineLoader message="Analyzing your personality…" />;
+    return <InsightsPageSkeleton />;
   }
 
   const ocean = personality?.ocean || { O: 60, C: 65, E: 55, A: 50, N: 40 };

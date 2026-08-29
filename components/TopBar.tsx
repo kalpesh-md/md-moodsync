@@ -13,11 +13,11 @@ import {
 } from "lucide-react";
 import { connectGoogleFit } from "@/lib/api/googlefit";
 import { connectSpotify } from "@/lib/api/spotify";
-import { getIntegrationStatus } from "@/lib/api/integrations";
 import type { User } from "@/lib/api/user";
 import { Button } from "@/components/ui/button";
 import { useMoodScaleUrl } from "@/lib/useMoodScaleUrl";
 import { formatUsername } from "@/lib/utils";
+import { useIntegrationStatus } from "@/lib/hooks/queries";
 
 interface TopBarProps {
   onCheckIn: () => void;
@@ -26,8 +26,9 @@ interface TopBarProps {
 
 export default function TopBar({ onCheckIn, user }: TopBarProps) {
   const [isDark, setIsDark] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
-  const [fitConnected, setFitConnected] = useState(false);
+  const { data: integrations } = useIntegrationStatus(!!user);
+  const spotifyConnected = integrations?.spotify.connected ?? false;
+  const fitConnected = integrations?.googleFit.connected ?? false;
   const moodscaleUrl = useMoodScaleUrl();
 
   useEffect(() => {
@@ -35,17 +36,6 @@ export default function TopBar({ onCheckIn, user }: TopBarProps) {
     const dark = savedTheme === "dark";
     setIsDark(dark);
     document.documentElement.classList.toggle("dark", dark);
-  }, []);
-
-  useEffect(() => {
-    getIntegrationStatus()
-      .then((status) => {
-        setSpotifyConnected(status.spotify.connected);
-        setFitConnected(status.googleFit.connected);
-      })
-      .catch(() => {
-        // Non-blocking — buttons fall back to connect state.
-      });
   }, []);
 
   const toggleTheme = () => {

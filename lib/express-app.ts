@@ -12,6 +12,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import AWS from "aws-sdk";
 import { getSupabaseAdmin, getUserFromAccessToken } from "@/lib/supabase";
 import { ensureMoodSyncProfile } from "@/lib/profile";
+import {
+  encodeCheckinNote,
+  enrichCheckin,
+  getCheckinMoods,
+} from "@/lib/checkinMoods";
 
 AWS.config.update({
   accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
@@ -54,8 +59,65 @@ function getCached(cache, userId) {
   return entry.data;
 }
 
+function getStaleCached(cache, userId) {
+  return cache.get(userId)?.data ?? null;
+}
+
 function setCached(cache, userId, data) {
   cache.set(userId, { data, timestamp: Date.now() });
+}
+
+const MOCK_FORECAST = [
+  {
+    timeLabel: "Next 2 hours",
+    predictedMood: "Focused",
+    confidence: 75,
+    doNow: ["Take a short break", "Stay hydrated", "Tackle one priority task"],
+    avoid: ["Multitasking", "Heavy caffeine"],
+  },
+  {
+    timeLabel: "Tonight (7-10pm)",
+    predictedMood: "Calm",
+    confidence: 70,
+    doNow: ["Wind down with music", "Light stretching", "Plan tomorrow lightly"],
+    avoid: ["Stressful emails", "Late caffeine"],
+  },
+  {
+    timeLabel: "Tomorrow Morning (8-11am)",
+    predictedMood: "Energetic",
+    confidence: 80,
+    doNow: ["Plan your top 3 tasks", "Get morning sunlight", "Eat a balanced breakfast"],
+    avoid: ["Skipping breakfast", "Diving into notifications first"],
+  },
+];
+
+function normalizeForecastItems(data) {
+  const raw = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.forecast)
+      ? data.forecast
+      : null;
+
+  if (!raw?.length) return null;
+
+  const normalized = raw
+    .map((item) => ({
+      timeLabel: String(item?.timeLabel || item?.time || "Upcoming"),
+      predictedMood: String(item?.predictedMood || item?.mood || "Balanced"),
+      confidence: Math.min(
+        100,
+        Math.max(0, Number(item?.confidence ?? 60) || 60),
+      ),
+      doNow: Array.isArray(item?.doNow)
+        ? item.doNow.map(String)
+        : ["Take a mindful pause"],
+      avoid: Array.isArray(item?.avoid)
+        ? item.avoid.map(String)
+        : ["Overcommitting"],
+    }))
+    .filter((item) => item.timeLabel && item.predictedMood);
+
+  return normalized.length > 0 ? normalized.slice(0, 3) : null;
 }
 
 function jwtSecret() {
@@ -474,7 +536,7 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
   const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
   const { data: recentCheckins } = await db
     .from("mood_checkins")
-    .select("mood_label")
+    .select("mood_label, note, mood_labels")
     .eq("user_id", userId)
     .gte("created_at", threeHoursAgo)
     .order("created_at", { ascending: false })
@@ -483,7 +545,7 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
   const recentCheckin = recentCheckins?.[0];
 
   const moodScore = computeMoodScore({
-    moodLabel: recentCheckin?.mood_label || null,
+    moodLabel: recentCheckin ? getCheckinMoods(recentCheckin) || null : null,
     trackPopularity: nowPlaying?.item?.popularity ?? null,
     steps: fitData.steps,
   });
@@ -581,26 +643,39 @@ app.post("/api/checkins", authRequired, async (req, res) => {
     : mood
       ? [mood]
       : [];
-  const moodLabel = moodList.map(toMoodEnum).filter(Boolean).join(", ");
+  const normalizedMoods = moodList.map(toMoodEnum).filter(Boolean);
 
-  if (!moodLabel) {
+  if (normalizedMoods.length === 0) {
     return res.status(400).json({ error: "At least one mood is required" });
   }
 
+  const primaryMood = normalizedMoods[0];
+  const finalNote = encodeCheckinNote(normalizedMoods, note || "");
+
+  const payload = {
+    user_id: req.user.userId,
+    mood_label: primaryMood,
+    note: finalNote,
+    share_with_friends: shareWithFriends,
+  };
+
   try {
-    const { data, error } = await db
+    let result = await db
       .from("mood_checkins")
-      .insert({
-        user_id: req.user.userId,
-        mood_label: moodLabel,
-        note,
-        share_with_friends: shareWithFriends,
-      })
+      .insert({ ...payload, mood_labels: normalizedMoods })
       .select("*")
       .single();
 
-    if (error) throw error;
-    res.json({ checkin: data });
+    if (result.error?.message?.includes("mood_labels")) {
+      result = await db
+        .from("mood_checkins")
+        .insert(payload)
+        .select("*")
+        .single();
+    }
+
+    if (result.error) throw result.error;
+    res.json({ checkin: enrichCheckin(result.data) });
   } catch (err) {
     console.error("checkin save error:", err.message);
     res.status(500).json({ error: "Failed to save checkin" });
@@ -617,7 +692,7 @@ app.get("/api/checkins", authRequired, async (req, res) => {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    res.json({ checkins: data || [] });
+    res.json({ checkins: (data || []).map(enrichCheckin) });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch checkins" });
   }
@@ -635,7 +710,7 @@ app.get("/api/checkins/latest", authRequired, async (req, res) => {
       .maybeSingle();
 
     if (error) throw error;
-    res.json({ checkin: data || null });
+    res.json({ checkin: data ? enrichCheckin(data) : null });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch latest checkin" });
   }
@@ -695,7 +770,7 @@ app.get("/api/forecast", authRequired, async (req, res) => {
 
   const cached = getCached(forecastCache, userId);
   if (cached) {
-    return res.json(cached);
+    return res.json({ forecast: cached, source: "cache" });
   }
 
   try {
@@ -716,47 +791,20 @@ app.get("/api/forecast", authRequired, async (req, res) => {
       .gte("created_at", weekAgo)
       .order("created_at", { ascending: true });
 
-    const mockForecast = [
-      {
-        timeLabel: "Next 2 hours",
-        predictedMood: "Focused",
-        confidence: 75,
-        doNow: ["Take a break", "Stay hydrated"],
-        avoid: ["Multitasking"],
-        drivers: [{ key: "energy", val: 0.6, sentiment: "positive" }],
-      },
-      {
-        timeLabel: "Tonight (7-10pm)",
-        predictedMood: "Calm",
-        confidence: 70,
-        doNow: ["Relax", "Listen to music"],
-        avoid: ["Caffeine"],
-        drivers: [{ key: "valence", val: 0.5, sentiment: "neutral" }],
-      },
-      {
-        timeLabel: "Tomorrow Morning (8-11am)",
-        predictedMood: "Energetic",
-        confidence: 80,
-        doNow: ["Plan your day", "Exercise"],
-        avoid: ["Skipping breakfast"],
-        drivers: [{ key: "steps", val: 0.7, sentiment: "positive" }],
-      },
-    ];
-
-    if (
+    const hasGemini =
       process.env.GEMINI_API_KEY &&
-      process.env.GEMINI_API_KEY !== "your_gemini_key"
-    ) {
+      process.env.GEMINI_API_KEY !== "your_gemini_key";
+
+    if (hasGemini) {
       try {
         const systemPrompt = `You are a mood prediction engine. Given a user's music listening data, 
         fitness data, and self-reported check-ins from the past 7 days, predict their mood for the next 
         3 time windows: next 2 hours, tonight (7-10pm), and tomorrow morning (8-11am).
 
         For each window return JSON:
-        { timeLabel, predictedMood, confidence (0-100), doNow: string[], avoid: string[], 
-          drivers: [{key, val, sentiment: "positive"|"neutral"|"negative"}] }
+        { timeLabel, predictedMood, confidence (0-100), doNow: string[], avoid: string[] }
 
-        Return only a JSON array, no markdown.`;
+        Return only a JSON array of exactly 3 objects, no markdown.`;
 
         const prompt = `
         ${systemPrompt}
@@ -771,46 +819,32 @@ app.get("/api/forecast", authRequired, async (req, res) => {
         ${new Date().toISOString()}
         `;
 
-        const response = await generateWithRetry(prompt);
+        const response = await generateWithRetry(prompt, 3, 1500);
+        const forecast = normalizeForecastItems(extractJson(response.text()));
 
-        const text = response.text();
+        if (forecast) {
+          setCached(forecastCache, userId, forecast);
+          return res.json({ forecast, source: "ai" });
+        }
 
-        const forecast = extractJson(text);
-
-        setCached(forecastCache, userId, forecast);
-        return res.json(forecast);
+        console.log("AI forecast invalid shape — using fallback");
       } catch (aiError) {
-        console.log("AI Error, using mock forecast:", aiError.message);
-        console.log("AI Error full:", aiError);
+        console.log("AI forecast error:", aiError.message);
+        const stale = getStaleCached(forecastCache, userId);
+        if (stale) {
+          return res.json({ forecast: stale, source: "cache" });
+        }
       }
     }
 
-    res.json(mockForecast);
+    res.json({ forecast: MOCK_FORECAST, source: "mock" });
   } catch (err) {
     console.log("Forecast error:", err.message);
-    res.json([
-      {
-        timeLabel: "Next 2 hours",
-        predictedMood: "Focused",
-        confidence: 75,
-        doNow: ["Take a break"],
-        avoid: ["Multitasking"],
-      },
-      {
-        timeLabel: "Tonight",
-        predictedMood: "Calm",
-        confidence: 70,
-        doNow: ["Relax"],
-        avoid: ["Caffeine"],
-      },
-      {
-        timeLabel: "Tomorrow Morning",
-        predictedMood: "Energetic",
-        confidence: 80,
-        doNow: ["Plan your day"],
-        avoid: ["Skipping breakfast"],
-      },
-    ]);
+    const stale = getStaleCached(forecastCache, userId);
+    if (stale) {
+      return res.json({ forecast: stale, source: "cache" });
+    }
+    res.json({ forecast: MOCK_FORECAST, source: "fallback" });
   }
 });
 
@@ -901,21 +935,47 @@ app.get("/api/recs", authRequired, async (req, res) => {
     .maybeSingle();
 
   if (!user?.spotify_access_token) {
-    return res.json({ recommendations: [], error: "Spotify not connected" });
+    return res.json({
+      recommendations: [],
+      status: "spotify_not_connected",
+      message: "Connect Spotify to see music picked for your mood.",
+    });
+  }
+
+  let accessToken = user.spotify_access_token;
+
+  if (
+    (!user.spotify_token_expires ||
+      new Date() > new Date(user.spotify_token_expires)) &&
+    user.spotify_refresh_token
+  ) {
+    try {
+      const refreshed = await refreshSpotifyToken(userId);
+      if (refreshed) accessToken = refreshed;
+    } catch (err) {
+      console.log("Recs token refresh failed:", err.message);
+    }
   }
 
   try {
     let topTracks = { items: [] };
     const topRes = await fetch(
       "https://api.spotify.com/v1/me/top/tracks?limit=20&time_range=short_term",
-      { headers: { Authorization: `Bearer ${user.spotify_access_token}` } },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
     );
+    if (topRes.status === 401) {
+      return res.json({
+        recommendations: [],
+        status: "token_expired",
+        message: "Your Spotify session expired. Reconnect to refresh recommendations.",
+      });
+    }
     if (topRes.ok) topTracks = await topRes.json();
 
     let recentTracks = { items: [] };
     const recentRes = await fetch(
       "https://api.spotify.com/v1/me/player/recently-played?limit=20",
-      { headers: { Authorization: `Bearer ${user.spotify_access_token}` } },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     if (recentRes.ok) recentTracks = await recentRes.json();
 
@@ -933,16 +993,22 @@ app.get("/api/recs", authRequired, async (req, res) => {
     if (deduped.length === 0) {
       return res.json({
         recommendations: [],
-        error: "No listening history yet. Play some music on Spotify!",
+        status: "no_history",
+        message:
+          "No listening history yet. Play a few tracks on Spotify and check back — we'll learn your taste quickly.",
       });
     }
 
     const shuffled = deduped.sort(() => Math.random() - 0.5).slice(0, 12);
 
-    res.json({ recommendations: shuffled });
+    res.json({ recommendations: shuffled, status: "ok" });
   } catch (err) {
     console.log("Recs route error:", err.message);
-    res.json({ recommendations: [], error: "Failed to load recommendations" });
+    res.json({
+      recommendations: [],
+      status: "error",
+      message: "We couldn't reach Spotify right now. Please try again.",
+    });
   }
 });
 
@@ -1138,7 +1204,7 @@ app.get("/api/friends", authRequired, async (req, res) => {
   for (const u of profiles || []) {
     const { data: lastCheckin } = await db
       .from("mood_checkins")
-      .select("mood_label")
+      .select("mood_label, note, mood_labels")
       .eq("user_id", u.user_id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -1147,7 +1213,7 @@ app.get("/api/friends", authRequired, async (req, res) => {
     result.push({
       id: u.user_id,
       username: u.username,
-      last_mood: lastCheckin?.mood_label ?? null,
+      last_mood: lastCheckin ? getCheckinMoods(lastCheckin) : null,
     });
   }
 
@@ -1310,7 +1376,15 @@ function extractJson(text) {
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/```\s*$/i, "");
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (arrayMatch) return JSON.parse(arrayMatch[0]);
+    const objectMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (objectMatch) return JSON.parse(objectMatch[0]);
+    throw new Error("Could not parse AI JSON response");
+  }
 }
 
 async function sendFriendRequestEmail(toEmail, toUsername, fromUsername) {
