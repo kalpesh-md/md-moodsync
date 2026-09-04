@@ -8,6 +8,7 @@ import { getIntegrationStatus } from "@/lib/api/integrations";
 import { syncMood } from "@/lib/api/mood";
 import { getRecs } from "@/lib/api/recs";
 import { getForecast } from "@/lib/api/forecast";
+import { getPersonality } from "@/lib/api/insights";
 
 export const queryKeys = {
   me: ["me"] as const,
@@ -17,6 +18,7 @@ export const queryKeys = {
   moodSync: ["mood", "sync"] as const,
   recs: ["recs"] as const,
   forecast: ["forecast"] as const,
+  personality: ["insights", "personality"] as const,
 };
 
 const sharedQueryOptions = {
@@ -95,6 +97,19 @@ export function useRecs(enabled = true) {
   });
 }
 
+export function usePersonality(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.personality,
+    queryFn: getPersonality,
+    enabled,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+    placeholderData: (prev) => prev,
+    ...sharedQueryOptions,
+  });
+}
+
 export function useForecast(enabled = true) {
   return useQuery({
     queryKey: queryKeys.forecast,
@@ -129,6 +144,11 @@ export function usePrefetchAppData(enabled = true) {
       queryFn: syncMood,
       staleTime: 15 * 1000,
     });
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.personality,
+      queryFn: getPersonality,
+      staleTime: 10 * 60 * 1000,
+    });
   }, [enabled, queryClient]);
 }
 
@@ -139,5 +159,7 @@ export function useInvalidateCheckins() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.latestCheckin });
     // Refresh mood score in background — don't block check-in save UI.
     void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.recs });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.personality });
   };
 }

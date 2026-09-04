@@ -89,7 +89,7 @@ function MoodSyncShell() {
     today: <TodayScreen checkins={checkins} latest={latestCheckin} />,
     forecast: <ForecastScreen />,
     friends: <FriendsScreen />,
-    insights: <InsightsScreen checkins={checkins} />,
+    insights: <InsightsScreen />,
     recs: <RecsScreen />,
   };
 

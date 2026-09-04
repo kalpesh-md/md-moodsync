@@ -17,6 +17,12 @@ import {
   enrichCheckin,
   getCheckinMoods,
 } from "@/lib/checkinMoods";
+import {
+  energyBand,
+  energyFromMoods,
+  estimateTrackEnergy,
+  reasonForTrack,
+} from "@/lib/moodEnergy";
 
 AWS.config.update({
   accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
@@ -846,13 +852,8 @@ app.get("/api/forecast", authRequired, async (req, res) => {
 
 app.get("/api/insights/personality", authRequired, async (req, res) => {
   const userId = req.user.userId;
-
-  const cached = getCached(insightsCache, userId);
-  if (cached) {
-    return res.json(cached);
-  }
-
   const db = getSupabaseAdmin();
+  const MIN_CHECKINS = 5;
 
   const { data: snapshots } = await db
     .from("mood_snapshots")
@@ -868,14 +869,55 @@ app.get("/api/insights/personality", authRequired, async (req, res) => {
     .order("created_at", { ascending: false })
     .limit(50);
 
+  const checkinCount = (checkins || []).length;
+  const snapshotCount = (snapshots || []).length;
+  const dist = moodDistribution(checkins || []);
+  const pattern = moodPatternFromDist(dist);
+
+  const cached = getCached(insightsCache, userId);
+  if (cached?.source === "ai") {
+    return res.json({
+      ...cached,
+      checkinCount,
+      snapshotCount,
+      moodPattern: pattern,
+    });
+  }
+
+  if (checkinCount < MIN_CHECKINS) {
+    return res.json({
+      source: "insufficient",
+      checkinCount,
+      snapshotCount,
+      moodPattern: pattern,
+      ocean: heuristicOcean(dist),
+      mbti: null,
+      insights: [
+        {
+          head: "Keep checking in",
+          body: `Personality reads get sharper after ${MIN_CHECKINS} mood check-ins. You have ${checkinCount} so far.`,
+        },
+        {
+          head: "Music + mood",
+          body: snapshotCount
+            ? "We're already watching how your listening lines up with how you feel."
+            : "Connect Spotify so insights can mix music patterns with check-ins.",
+        },
+        {
+          head: "No type guess yet",
+          body: "We won't invent an MBTI type until there's enough of your own data.",
+        },
+      ],
+    });
+  }
+
   const systemPrompt = `You are a psychometric inference engine. Based on a user's music audio features, fitness patterns, and self-reported moods, estimate:
 1. Big Five OCEAN scores (0-100 each)
-2. Most likely MBTI type (4-letter code + confidence)
+2. Most likely MBTI type (4-letter code + confidence) — only if the data actually supports it
 3. MBTI axis leanings as percentages toward the SECOND letter of each pair (e.g. IE: 65 means 65% leaning Extraversion)
-4. 3 personalized insight strings
+4. 3 personalized insight strings grounded in the mood distribution
 
 Return only JSON: { ocean: {O,C,E,A,N}, mbti: {type, confidence, axes: {IE, NS, TF, JP}}, insights: [{head, body, color}] }`;
-  let personality;
 
   try {
     const prompt = `
@@ -885,31 +927,52 @@ Return only JSON: { ocean: {O,C,E,A,N}, mbti: {type, confidence, axes: {IE, NS, 
     ${JSON.stringify(aggregateFeatures(snapshots || []), null, 2)}
 
     Mood distribution:
-    ${JSON.stringify(moodDistribution(checkins || []), null, 2)}
+    ${JSON.stringify(dist, null, 2)}
 
     Fitness patterns:
     ${JSON.stringify(fitnessPatterns(snapshots || []), null, 2)}
     `;
 
     const response = await generateWithRetry(prompt);
-
-    personality = extractJson(response.text());
-    setCached(insightsCache, userId, personality);
+    const personality = extractJson(response.text());
+    const payload = {
+      source: "ai",
+      checkinCount,
+      snapshotCount,
+      moodPattern: pattern,
+      ocean: personality?.ocean || heuristicOcean(dist),
+      mbti: personality?.mbti?.type ? personality.mbti : null,
+      insights: Array.isArray(personality?.insights) ? personality.insights : [],
+    };
+    setCached(insightsCache, userId, payload);
+    return res.json(payload);
   } catch (e) {
     console.log("Personality AI error:", e.message);
-    personality = {
-      ocean: { O: 60, C: 65, E: 55, A: 50, N: 40 },
-      mbti: { type: "INTJ", confidence: 50 },
+    return res.json({
+      source: "heuristic",
+      checkinCount,
+      snapshotCount,
+      moodPattern: pattern,
+      ocean: heuristicOcean(dist),
+      mbti: null,
       insights: [
         {
-          head: "Not enough data yet",
-          body: "Add more check-ins to improve insights accuracy.",
+          head: "Working from your check-ins",
+          body: "The full personality model is unavailable right now, so this is a mood-based sketch — not a diagnosis.",
+        },
+        {
+          head: "What stands out",
+          body: pattern[0]
+            ? `Your most logged mood is ${pattern[0].label}. That pulls the trait mix below.`
+            : "Keep logging moods to see a clearer trait mix.",
+        },
+        {
+          head: "No MBTI estimate",
+          body: "We skip a four-letter type when the model cannot run, instead of filling in a placeholder.",
         },
       ],
-    };
+    });
   }
-
-  res.json(personality);
 });
 
 // ============================================
@@ -993,7 +1056,53 @@ app.get("/api/recs", authRequired, async (req, res) => {
 
     const shuffled = deduped.sort(() => Math.random() - 0.5).slice(0, 12);
 
-    res.json({ recommendations: shuffled, status: "ok" });
+    const { data: latestCheckin } = await db
+      .from("mood_checkins")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const latest = latestCheckin ? enrichCheckin(latestCheckin) : null;
+    const moods = latest?.mood_labels?.length
+      ? latest.mood_labels
+      : latest?.mood_label
+        ? [latest.mood_label]
+        : [];
+    const prefer = energyFromMoods(moods);
+    const rank = (band) => (band === prefer ? 0 : band === "medium" ? 1 : 2);
+
+    const recommendations = shuffled
+      .map((track) => {
+        const energy = estimateTrackEnergy(track, prefer);
+        const band = energyBand(energy);
+        return {
+          id: track.id,
+          name: track.name,
+          artists: track.artists,
+          album: track.album,
+          external_urls: track.external_urls,
+          popularity: track.popularity,
+          energy,
+          energy_band: band,
+          reason: "",
+        };
+      })
+      .sort((a, b) => rank(a.energy_band) - rank(b.energy_band))
+      .map((track, index) => ({
+        ...track,
+        reason: reasonForTrack(moods, track.energy_band, index === 0),
+      }));
+
+    res.json({
+      recommendations,
+      status: "ok",
+      mood: {
+        labels: moods,
+        energy_band: prefer,
+      },
+    });
   } catch (err) {
     console.log("Recs route error:", err.message);
     res.json({
@@ -1559,10 +1668,43 @@ function aggregateFeatures(snapshots) {
 }
 
 function moodDistribution(checkins) {
-  return checkins.reduce((acc, c) => {
-    acc[c.mood_label] = (acc[c.mood_label] || 0) + 1;
+  return (checkins || []).reduce((acc, c) => {
+    const enriched = enrichCheckin(c);
+    const labels = enriched.mood_labels?.length
+      ? enriched.mood_labels
+      : enriched.mood_label
+        ? [enriched.mood_label]
+        : [];
+    labels.forEach((raw) => {
+      const key = String(raw).trim().toLowerCase();
+      if (!key) return;
+      acc[key] = (acc[key] || 0) + 1;
+    });
     return acc;
   }, {});
+}
+
+function moodPatternFromDist(dist) {
+  return Object.entries(dist)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => ({ label, count }));
+}
+
+function heuristicOcean(dist) {
+  const total = Object.values(dist).reduce((sum, n) => sum + n, 0) || 1;
+  const share = (key) => (dist[key] || 0) / total;
+  const clamp = (n) => Math.max(8, Math.min(92, Math.round(n)));
+  return {
+    O: clamp(48 + share("excited") * 30 + share("happy") * 10),
+    C: clamp(50 + share("focused") * 35 - share("tired") * 12),
+    E: clamp(
+      45 +
+        (share("happy") + share("excited")) * 30 -
+        (share("calm") + share("low")) * 15,
+    ),
+    A: clamp(50 + share("calm") * 25 - share("stressed") * 15),
+    N: clamp(35 + (share("anxious") + share("stressed") + share("low")) * 40),
+  };
 }
 
 function fitnessPatterns(snapshots) {
