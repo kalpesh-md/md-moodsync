@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { MsButton } from "@/components/ui/ms/MsButton";
+import { MsPill } from "@/components/ui/ms/MsPill";
 import {
   Dialog,
   DialogContent,
@@ -14,24 +15,17 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-interface MoodOption {
-  emoji: string;
-  name: string;
-  color: string;
-}
-
-const MOODS: MoodOption[] = [
-  { emoji: "😊", name: "Happy", color: "#4ECDC4" },
-  { emoji: "🧠", name: "Focused", color: "#7F77DD" },
-  { emoji: "😌", name: "Calm", color: "#45B7D1" },
-  { emoji: "😔", name: "Low", color: "#A8A8A8" },
-  { emoji: "😰", name: "Anxious", color: "#C084FC" },
-  { emoji: "😤", name: "Stressed", color: "#FF8C42" },
-  { emoji: "🤩", name: "Excited", color: "#FF6B6B" },
-  { emoji: "😴", name: "Tired", color: "#F7B731" },
+const MOODS = [
+  { emoji: "😊", name: "Happy" },
+  { emoji: "🧠", name: "Focused" },
+  { emoji: "😌", name: "Calm" },
+  { emoji: "😔", name: "Low" },
+  { emoji: "😰", name: "Anxious" },
+  { emoji: "😤", name: "Stressed" },
+  { emoji: "🤩", name: "Excited" },
+  { emoji: "😴", name: "Tired" },
 ];
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -89,12 +83,10 @@ export default function CheckInModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto border-0 bg-gradient-to-br from-white via-[#f0f9ff] to-[#e9eef5] sm:max-w-md dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+      <DialogContent className="max-h-[90vh] overflow-y-auto border-ms-line bg-ms-card sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-navy dark:text-slate-100">
-            How are you feeling?
-          </DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-ms-ink">How are you feeling?</DialogTitle>
+          <DialogDescription className="text-ms-ink2">
             Select one or more moods — this trains your personal mood model.
           </DialogDescription>
         </DialogHeader>
@@ -108,23 +100,21 @@ export default function CheckInModal({
                 type="button"
                 onClick={() => toggleMood(m.name)}
                 className={cn(
-                  "flex flex-col items-center gap-1 rounded-xl border p-3 text-xs transition-all",
+                  "flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs transition-all",
                   isSelected
-                    ? "border-transparent shadow-md ring-2 ring-offset-1"
-                    : "border-line hover:bg-white/80 dark:border-slate-700 dark:hover:bg-slate-800",
+                    ? "border-ms-navy bg-ms-soft shadow-[0_0_0_3px_rgba(30,58,95,0.08)]"
+                    : "border-ms-line bg-ms-card hover:border-ms-line-strong hover:bg-ms-tint",
                 )}
-                style={
-                  isSelected
-                    ? {
-                        backgroundColor: `${m.color}22`,
-                        borderColor: m.color,
-                        boxShadow: `0 0 0 2px ${m.color}44`,
-                      }
-                    : undefined
-                }
               >
-                <span className="text-xl">{m.emoji}</span>
-                <span className="font-medium">{m.name}</span>
+                <span className="text-xl leading-none">{m.emoji}</span>
+                <span
+                  className={cn(
+                    "text-[11px] font-semibold",
+                    isSelected ? "text-ms-navy" : "text-ms-ink2",
+                  )}
+                >
+                  {m.name}
+                </span>
               </button>
             );
           })}
@@ -133,47 +123,48 @@ export default function CheckInModal({
         {selected.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {selected.map((name) => (
-              <Badge key={name} variant="secondary" className="bg-navy/10 text-navy">
+              <MsPill key={name} tone="brand">
                 {name}
-              </Badge>
+              </MsPill>
             ))}
           </div>
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="note">Note (optional)</Label>
+          <Label htmlFor="note" className="text-ms-ink2">
+            Note (optional)
+          </Label>
           <Textarea
             id="note"
             placeholder="What shaped your mood today?"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
+            className="border-ms-line bg-ms-tint focus:border-ms-mid focus:bg-ms-card"
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-line/80 bg-white/60 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
+        <div className="flex items-center justify-between rounded-xl border border-ms-line bg-ms-tint px-3.5 py-3">
           <div>
-            <p className="text-sm font-medium">Share with friends</p>
-            <p className="text-xs text-muted-foreground">
-              Visible to mutual friends only
-            </p>
+            <p className="text-sm font-semibold text-ms-ink">Share with friends</p>
+            <p className="text-xs text-ms-ink3">Visible to mutual friends only</p>
           </div>
           <Switch checked={share} onCheckedChange={setShare} />
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">This week</p>
-          <Badge variant="secondary">{count}/7 days</Badge>
+          <p className="text-xs text-ms-ink3">This week</p>
+          <MsPill tone="neutral">{count}/7 days</MsPill>
         </div>
         <div className="flex gap-1.5">
           {DAYS.map((d, i) => (
             <div
               key={`${d}-${i}`}
               className={cn(
-                "flex h-8 flex-1 items-center justify-center rounded-md text-xs font-medium",
+                "flex h-8 flex-1 items-center justify-center rounded-lg text-xs font-bold",
                 checkins[i]
-                  ? "bg-gradient-to-br from-navy to-navy-mid text-white shadow-sm"
-                  : "bg-white/70 text-slate-400 dark:bg-slate-700 dark:text-slate-400",
+                  ? "bg-ms-navy text-white"
+                  : "border border-dashed border-ms-line-strong text-ms-ink3",
               )}
             >
               {d}
@@ -181,15 +172,11 @@ export default function CheckInModal({
           ))}
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-          >
+        <DialogFooter className="gap-2 sm:gap-0">
+          <MsButton variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={selected.length === 0 || saving}>
+          </MsButton>
+          <MsButton onClick={handleSave} disabled={selected.length === 0 || saving}>
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -198,7 +185,7 @@ export default function CheckInModal({
             ) : (
               "Save check-in"
             )}
-          </Button>
+          </MsButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

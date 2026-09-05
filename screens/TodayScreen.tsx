@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  Check,
   Download,
   Footprints,
   Heart,
@@ -18,67 +19,45 @@ import { useNotice } from "@/components/notice-provider";
 import { connectSpotify } from "@/lib/api/spotify";
 import { connectGoogleFit } from "@/lib/api/googlefit";
 import type { Checkin } from "@/lib/api/checkins";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { MsButton } from "@/components/ui/ms/MsButton";
+import { MsCard, MsCardHeader } from "@/components/ui/ms/MsCard";
+import { MsPill } from "@/components/ui/ms/MsPill";
 import { formatMoodLabel } from "@/lib/utils";
 import { queryKeys, useMoodSync } from "@/lib/hooks/queries";
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const CIRC = 2 * Math.PI * 44;
 
-function scoreColor(score: number): string {
-  if (score >= 60) return "#10b981";
-  if (score >= 40) return "#378ADD";
-  return "#f59e0b";
-}
-
 function ScoreRing({ score, loading }: { score: number | null; loading: boolean }) {
   const display = score ?? 0;
-  const color = score != null ? scoreColor(score) : "#94a3b8";
 
   return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg viewBox="0 0 100 100" className="h-28 w-28 -rotate-90">
-        <circle
-          cx="50"
-          cy="50"
-          r="44"
-          fill="none"
-          className="stroke-[#E9EEF5] dark:stroke-slate-700"
-          strokeWidth="9"
-        />
+    <div className="relative h-24 w-24 shrink-0">
+      <svg viewBox="0 0 100 100" className="h-24 w-24 -rotate-90">
+        <circle cx="50" cy="50" r="44" fill="none" className="stroke-ms-soft" strokeWidth="9" />
         {!loading && score != null && (
           <circle
             cx="50"
             cy="50"
             r="44"
             fill="none"
-            stroke={color}
+            className="stroke-ms-navy"
             strokeWidth="9"
             strokeLinecap="round"
             strokeDasharray={CIRC}
             strokeDashoffset={CIRC * (1 - Math.min(100, Math.max(0, display)) / 100)}
-            className="transition-all duration-700"
           />
         )}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {loading ? (
-          <Loader2 className="h-6 w-6 animate-spin text-navy-mid" />
+          <Loader2 className="h-6 w-6 animate-spin text-ms-mid" />
         ) : (
           <>
-            <span className="text-3xl font-bold leading-none text-navy dark:text-slate-100">
+            <span className="text-2xl font-bold leading-none text-ms-ink">
               {score != null ? Math.round(score) : "—"}
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-ms-ink3">
               score
             </span>
           </>
@@ -142,7 +121,6 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Music2,
       label: "Listening",
-      accent: "#1DB954",
       value: syncData?.track?.name
         ? syncData.track.name
         : syncing
@@ -159,7 +137,6 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Heart,
       label: "Heart rate",
-      accent: "#ef4444",
       value: syncData?.fitData?.heartRate
         ? `${Math.round(syncData.fitData.heartRate)} bpm`
         : syncing
@@ -172,7 +149,6 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Footprints,
       label: "Steps",
-      accent: "#378ADD",
       value: syncData?.fitData?.steps
         ? syncData.fitData.steps.toLocaleString()
         : syncing
@@ -183,7 +159,6 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     {
       icon: Moon,
       label: "Sleep",
-      accent: "#7F77DD",
       value: syncData?.fitData?.sleepHours
         ? `${syncData.fitData.sleepHours}h`
         : syncing
@@ -200,10 +175,10 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   if (isError && !syncData) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
-        <p className="text-sm text-muted-foreground">Could not load mood data.</p>
-        <Button size="sm" onClick={() => void handleSync()}>
+        <p className="text-sm text-ms-ink2">Could not load mood data.</p>
+        <MsButton size="sm" onClick={() => void handleSync()}>
           Retry
-        </Button>
+        </MsButton>
       </div>
     );
   }
@@ -212,149 +187,152 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
     <div className="space-y-5">
       <header className="mb-1 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#378ADD]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ms-ink3">
             Today
           </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-navy dark:text-slate-100">
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-ms-ink">
             Your mood right now
           </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-sm text-ms-ink2">
             Live mood from check-ins, Spotify, and Google Fit
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportMoodData}>
-            <Download className="h-4 w-4" />
+          <MsButton variant="secondary" size="sm" icon={<Download className="h-4 w-4" />} onClick={exportMoodData}>
             Export
-          </Button>
-          <Button size="sm" onClick={() => handleSync()} disabled={syncing} className="bg-gradient-to-r from-navy to-navy-mid">
-            {syncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
+          </MsButton>
+          <MsButton
+            size="sm"
+            onClick={() => handleSync()}
+            disabled={syncing}
+            icon={
+              syncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )
+            }
+          >
             Sync
-          </Button>
+          </MsButton>
         </div>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="ms-card-accent overflow-hidden border-0 bg-gradient-to-br from-white via-white to-[#f0f9ff] dark:from-slate-800 dark:via-slate-800 dark:to-slate-900">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-[15px]">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-navy to-[#378ADD] text-white shadow-sm">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              Mood score
-            </CardTitle>
-            <CardDescription>
-              {latest?.mood_label
+        <MsCard>
+          <MsCardHeader
+            title="Mood score"
+            meta={
+              latest?.mood_label
                 ? `Latest check-in: ${formatMoodLabel(latest.mood_label)}`
-                : "No check-in today yet — tap Check in above"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+                : "No check-in today yet — tap Check in above"
+            }
+            icon={<Sparkles size={16} />}
+          />
+          <div className="space-y-4 p-5">
             <div className="flex items-center gap-4">
               <ScoreRing score={moodScore} loading={syncing && moodScore == null} />
               <div>
-                <p className="text-sm font-semibold text-navy dark:text-slate-100">
+                <p className="text-sm font-semibold text-ms-ink">
                   {moodScore != null ? `Mood score ${Math.round(moodScore)}` : "Calculating…"}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">out of 100</p>
+                <p className="mt-1 text-xs text-ms-ink3">out of 100</p>
                 {moodScore != null && (
-                  <Badge
-                    variant="secondary"
-                    className="mt-2"
-                    style={{
-                      backgroundColor: `${scoreColor(moodScore)}18`,
-                      color: scoreColor(moodScore),
-                    }}
-                  >
+                  <MsPill tone="brand" className="mt-2">
                     {moodScore >= 60 ? "Positive" : moodScore >= 40 ? "Neutral" : "Low"}
-                  </Badge>
+                  </MsPill>
                 )}
               </div>
             </div>
-            {moodScore != null && <Progress value={moodScore} className="h-2" />}
-          </CardContent>
-        </Card>
-
-        <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#eef2ff] dark:from-slate-800 dark:to-slate-900">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-[15px]">Weekly streak</CardTitle>
-            <CardDescription>{count} of 7 days checked in this week</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-3 flex gap-1.5">
-              {DAYS.map((d, i) => (
+            {moodScore != null && (
+              <div className="h-2 overflow-hidden rounded-full bg-ms-soft">
                 <div
-                  key={`${d}-${i}`}
-                  className={`flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
-                    checkins[i]
-                      ? "bg-gradient-to-br from-navy to-navy-mid text-white shadow-sm"
-                      : "bg-white/80 text-slate-400 dark:bg-slate-700 dark:text-slate-400"
-                  }`}
-                >
-                  {d}
-                </div>
-              ))}
+                  className="h-full rounded-full bg-ms-navy transition-all"
+                  style={{ width: `${moodScore}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </MsCard>
+
+        <MsCard className="p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ms-amber-soft text-ms-amber">
+              <Activity size={20} />
+            </span>
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold leading-none tracking-tight text-ms-ink">
+                  {count}
+                </span>
+                <span className="text-sm font-semibold text-ms-ink2">days this week</span>
+              </div>
+              <p className="mt-1 text-xs text-ms-ink3">{count} of 7 days checked in</p>
             </div>
-            <Progress value={(count / 7) * 100} className="h-2" />
-          </CardContent>
-        </Card>
+          </div>
+          <div className="mt-4 flex gap-1.5">
+            {DAYS.map((d, i) => {
+              const done = checkins[i];
+              return (
+                <div key={`${d}-${i}`} className="flex flex-col items-center gap-1">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold ${
+                      done
+                        ? "bg-ms-navy text-white"
+                        : "border border-dashed border-ms-line-strong text-ms-ink3"
+                    }`}
+                  >
+                    {done ? <Check size={13} /> : d}
+                  </span>
+                  <span className="text-[10px] font-semibold text-ms-ink3">{d}</span>
+                </div>
+              );
+            })}
+          </div>
+        </MsCard>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {signals.map((s) => {
           const Icon = s.icon;
           return (
-            <Card
-              key={s.label}
-              className="ms-card-accent overflow-hidden border-0 bg-white dark:bg-slate-800/80"
-            >
-              <CardContent className="p-4">
+            <MsCard key={s.label}>
+              <div className="p-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: `${s.accent}18`, color: s.accent }}
-                    >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-ms-soft text-ms-navy">
                       <Icon className="h-4 w-4" />
                     </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-ms-ink3">
                       {s.label}
                     </span>
                   </div>
                   {s.action && (
-                    <Button variant="outline" size="sm" onClick={s.action} className="h-7 text-xs">
+                    <MsButton variant="secondary" size="sm" onClick={s.action}>
                       {s.actionLabel}
-                    </Button>
+                    </MsButton>
                   )}
                 </div>
-                <div className="mt-2 truncate text-lg font-bold leading-none text-navy dark:text-slate-100">
+                <div className="mt-2 truncate text-lg font-bold leading-none text-ms-ink">
                   {s.value}
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400">{s.detail}</div>
-              </CardContent>
-            </Card>
+                <div className="mt-1 text-[11px] text-ms-ink3">{s.detail}</div>
+              </div>
+            </MsCard>
           );
         })}
       </div>
 
-      <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#f0fdf4] dark:from-slate-800 dark:to-slate-900">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-[15px]">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-              <Activity className="h-4 w-4" />
-            </span>
-            Mood clock
-          </CardTitle>
-          <CardDescription>Your day mapped by mood periods</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <MsCard>
+        <MsCardHeader
+          title="Mood clock"
+          meta="Your day mapped by mood periods"
+          icon={<Activity size={16} />}
+        />
+        <div className="p-5">
           <MoodClock />
-        </CardContent>
-      </Card>
+        </div>
+      </MsCard>
     </div>
   );
 }

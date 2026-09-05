@@ -168,7 +168,7 @@ function MoodSyncShell() {
 
   return (
     <div className="ms-canvas relative min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-line/60 bg-white/75 px-4 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-slate-700/60 dark:bg-slate-900/75">
+      <header className="sticky top-0 z-30 border-b border-ms-line bg-ms-card/80 px-4 py-3 backdrop-blur-md md:px-6 md:py-4">
         <TopBar onCheckIn={() => setCheckInOpen(true)} />
       </header>
 

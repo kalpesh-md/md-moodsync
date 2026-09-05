@@ -4,7 +4,6 @@
 
 @layer base {
   :root {
-    /* MoodScale brand — navy primary (matches md-latest sidebar #1E3A5F) */
     --background: 210 40% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
@@ -28,13 +27,24 @@
 
     --ms-navy: #1e3a5f;
     --ms-navy-dark: #152a45;
-    --ms-mid: #2d5a8b;
-    --ms-sky: #f0f9ff;
-    --ms-blue: #378add;
-    --ms-teal: #4ecdc4;
-    --ms-purple: #7f77dd;
-    --ms-line: #e5e8ee;
-    --ms-ink: #0f172a;
+    --ms-navy-rgb: 30 58 95;
+    --ms-navy-dark-rgb: 21 42 69;
+    --ms-mid-rgb: 45 90 139;
+    --ms-soft-rgb: 233 238 245;
+    --ms-sky-rgb: 14 165 233;
+    --ms-sky-soft-rgb: 240 249 255;
+    --ms-emerald-rgb: 16 185 129;
+    --ms-emerald-soft-rgb: 236 253 245;
+    --ms-amber-rgb: 217 119 6;
+    --ms-amber-soft-rgb: 255 251 235;
+    --ms-ink-rgb: 15 23 42;
+    --ms-ink2-rgb: 71 84 103;
+    --ms-ink3-rgb: 152 162 179;
+    --ms-line-rgb: 229 232 238;
+    --ms-line-strong-rgb: 207 214 224;
+    --ms-tint-rgb: 248 250 252;
+    --ms-bg-rgb: 247 248 250;
+    --ms-card-rgb: 255 255 255;
   }
 
   .dark {
@@ -57,6 +67,22 @@
     --border: 222 47% 20%;
     --input: 222 47% 20%;
     --ring: 213 52% 45%;
+
+    --ms-navy-rgb: 91 143 196;
+    --ms-navy-dark-rgb: 56 114 176;
+    --ms-mid-rgb: 125 168 214;
+    --ms-soft-rgb: 30 41 59;
+    --ms-sky-soft-rgb: 12 74 110;
+    --ms-emerald-soft-rgb: 6 78 59;
+    --ms-amber-soft-rgb: 69 26 3;
+    --ms-ink-rgb: 241 245 249;
+    --ms-ink2-rgb: 203 213 225;
+    --ms-ink3-rgb: 148 163 184;
+    --ms-line-rgb: 51 65 85;
+    --ms-line-strong-rgb: 71 85 105;
+    --ms-tint-rgb: 30 41 59;
+    --ms-bg-rgb: 17 24 39;
+    --ms-card-rgb: 31 41 55;
   }
 }
 
@@ -66,11 +92,7 @@
   }
   html,
   body {
-    @apply min-h-full bg-[#F7F8FA] text-foreground antialiased;
-  }
-  .dark html,
-  .dark body {
-    @apply bg-gray-900;
+    @apply min-h-full bg-ms-bg text-foreground antialiased;
   }
   body {
     background-attachment: fixed;
@@ -79,17 +101,12 @@
 
 .ms-canvas {
   background:
-    radial-gradient(900px 500px at 0% -5%, rgba(55, 138, 221, 0.12) 0%, transparent 55%),
-    radial-gradient(700px 400px at 100% 0%, rgba(78, 205, 196, 0.1) 0%, transparent 50%),
-    radial-gradient(600px 350px at 50% 100%, rgba(127, 119, 221, 0.08) 0%, transparent 55%),
-    linear-gradient(180deg, #f7f8fa 0%, #eef2ff 100%);
+    radial-gradient(1200px 600px at 100% -10%, #f0f9ff 0%, rgba(240, 249, 255, 0) 60%),
+    #f7f8fa;
   background-attachment: fixed;
 }
 .dark .ms-canvas {
-  background:
-    radial-gradient(900px 500px at 0% -5%, rgba(55, 138, 221, 0.15) 0%, transparent 55%),
-    radial-gradient(700px 400px at 100% 0%, rgba(78, 205, 196, 0.08) 0%, transparent 50%),
-    linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  background: linear-gradient(135deg, #111827 0%, #1f2937 50%, #111827 100%);
   background-attachment: fixed;
 }
 
@@ -99,7 +116,6 @@
   }
 }
 
-/* Mood clock (scoped; not the old global dark theme) */
 @layer components {
   .mood-clock-modern {
     @apply flex flex-col items-center gap-4;
@@ -123,13 +139,13 @@
     @apply text-2xl;
   }
   .clock-label {
-    @apply text-sm font-semibold text-navy dark:text-slate-100;
+    @apply text-sm font-semibold text-ms-navy;
   }
   .clock-time {
-    @apply text-xs text-muted-foreground;
+    @apply text-xs text-ms-ink3;
   }
   .clock-legend-modern {
-    @apply flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground;
+    @apply flex flex-wrap items-center justify-center gap-3 text-xs text-ms-ink3;
   }
   .legend-item {
     @apply flex items-center gap-1.5;

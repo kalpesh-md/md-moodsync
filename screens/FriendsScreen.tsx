@@ -15,15 +15,9 @@ import {
   getFriendMoodTrend,
 } from "@/lib/api/friends";
 import type { FriendUser, MoodTrendPoint } from "@/lib/api/friends";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { MsButton } from "@/components/ui/ms/MsButton";
+import { MsCard, MsCardHeader } from "@/components/ui/ms/MsCard";
+import { MsPill } from "@/components/ui/ms/MsPill";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -54,25 +48,12 @@ const PRIVACY: PrivacyOption[] = [
   { key: "fitness", label: "Share fitness data", default: false },
 ];
 
-const MOOD_COLORS: Record<string, string> = {
-  happy: "#4ECDC4",
-  focused: "#7F77DD",
-  calm: "#45B7D1",
-  excited: "#FF6B6B",
-  tired: "#F7B731",
-  anxious: "#C084FC",
-  stressed: "#FF8C42",
-  low: "#A8A8A8",
-};
-
 interface FriendDisplay {
   id: string | number;
   name: string;
   initials: string;
-  color: string;
   match: number;
   mood: string;
-  moodColor: string;
   mutual: boolean;
 }
 
@@ -80,26 +61,22 @@ interface RequestDisplay {
   id: string | number;
   name: string;
   initials: string;
-  color: string;
 }
 
 function Avatar({
   initials,
-  color,
   size = "md",
 }: {
   initials: string;
-  color: string;
   size?: "md" | "lg";
 }) {
   return (
     <div
       className={
         size === "lg"
-          ? "flex h-20 w-20 items-center justify-center rounded-full text-xl font-semibold text-white shadow-md ring-4 ring-white dark:ring-slate-800"
-          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-sm"
+          ? "flex h-20 w-20 items-center justify-center rounded-full bg-ms-navy text-xl font-semibold text-white ring-4 ring-ms-card"
+          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ms-navy text-sm font-semibold text-white"
       }
-      style={{ background: `linear-gradient(135deg, ${color} 0%, #1E3A5F 100%)` }}
     >
       {initials}
     </div>
@@ -114,9 +91,7 @@ export default function FriendsScreen() {
   const [showTrend, setShowTrend] = useState(false);
   const [requests, setRequests] = useState<RequestDisplay[]>([]);
   const [friends, setFriends] = useState<FriendDisplay[]>([]);
-  const [selectedFriend, setSelectedFriend] = useState<FriendDisplay | null>(
-    null,
-  );
+  const [selectedFriend, setSelectedFriend] = useState<FriendDisplay | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [friendFilter, setFriendFilter] = useState("");
   const [searching, setSearching] = useState(false);
@@ -146,26 +121,20 @@ export default function FriendsScreen() {
       setPendingRequests(pendingData);
 
       setFriends(
-        friendsData.map((user) => {
-          const moodKey = (user.last_mood || "focused").toLowerCase().split(",")[0].trim();
-          return {
-            id: user.id,
-            name: formatUsername(user.username),
-            initials: user.username.slice(0, 2).toUpperCase(),
-            color: "#378ADD",
-            match: moodMatchPercent(user.id),
-            mood: formatMoodLabel(user.last_mood) || "No check-in",
-            moodColor: MOOD_COLORS[moodKey] || "#378ADD",
-            mutual: true,
-          };
-        }),
+        friendsData.map((user) => ({
+          id: user.id,
+          name: formatUsername(user.username),
+          initials: user.username.slice(0, 2).toUpperCase(),
+          match: moodMatchPercent(user.id),
+          mood: formatMoodLabel(user.last_mood) || "No check-in",
+          mutual: true,
+        })),
       );
       setRequests(
         requestsData.map((user) => ({
           id: user.id,
           name: formatUsername(user.username),
           initials: user.username.slice(0, 2).toUpperCase(),
-          color: "#7F77DD",
         })),
       );
     } catch (err) {
@@ -238,38 +207,34 @@ export default function FriendsScreen() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F77DD] to-navy text-white shadow-sm">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ms-soft text-ms-navy">
           <Users className="h-5 w-5" />
         </span>
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-navy dark:text-slate-100">
-            Friends
-          </h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-xl font-semibold tracking-tight text-ms-ink">Friends</h2>
+          <p className="text-sm text-ms-ink2">
             Find people, manage requests, and share mood safely
           </p>
         </div>
       </div>
 
-      <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#f0f9ff] dark:from-slate-800 dark:to-slate-900">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <UserPlus className="h-4 w-4 text-[#378ADD]" />
-            Find friends
-          </CardTitle>
-          <CardDescription>Search by username to send a request</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <MsCard>
+        <MsCardHeader
+          title="Find friends"
+          meta="Search by username to send a request"
+          icon={<UserPlus size={16} />}
+        />
+        <div className="p-5">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ms-ink3" />
             <Input
-              className="border-line/80 bg-white/80 pl-9 dark:bg-slate-900/60"
+              className="border-ms-line bg-ms-tint pl-9 focus:border-ms-mid focus:bg-ms-card"
               placeholder="Search username…"
               value={searchQuery}
               onChange={(e) => void handleSearch(e.target.value)}
             />
             {searching && (
-              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-ms-ink3" />
             )}
           </div>
 
@@ -278,22 +243,25 @@ export default function FriendsScreen() {
               {searchResults.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center gap-3 rounded-xl border border-[#378ADD]/20 bg-white/80 p-3 shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
+                  className="flex items-center gap-3 rounded-xl border border-ms-line bg-ms-tint p-3"
                 >
-                  <Avatar
-                    initials={user.username.slice(0, 2).toUpperCase()}
-                    color="#378ADD"
-                  />
+                  <Avatar initials={user.username.slice(0, 2).toUpperCase()} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-navy dark:text-slate-100">
+                    <p className="truncate font-semibold text-ms-ink">
                       {formatUsername(user.username)}
                     </p>
-                    <p className="text-xs text-muted-foreground">@{user.username}</p>
+                    <p className="text-xs text-ms-ink3">@{user.username}</p>
                   </div>
-                  <Button
+                  <MsButton
                     size="sm"
                     disabled={actionLoading === `add-${user.id}`}
-                    className="bg-gradient-to-r from-[#378ADD] to-navy shadow-sm"
+                    icon={
+                      actionLoading === `add-${user.id}` ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <UserPlus className="h-3.5 w-3.5" />
+                      )
+                    }
                     onClick={async () => {
                       setActionLoading(`add-${user.id}`);
                       try {
@@ -315,96 +283,88 @@ export default function FriendsScreen() {
                       }
                     }}
                   >
-                    {actionLoading === `add-${user.id}` ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <UserPlus className="h-3.5 w-3.5" />
-                        Add
-                      </>
-                    )}
-                  </Button>
+                    Add
+                  </MsButton>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </MsCard>
 
       {pendingRequests.length > 0 && (
-        <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#fef9c3] dark:from-slate-800 dark:to-slate-900">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              Pending sent
-              <Badge variant="secondary">{pendingRequests.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+        <MsCard>
+          <MsCardHeader
+            title="Pending sent"
+            meta={`${pendingRequests.length} waiting for response`}
+            action={<MsPill tone="warning">{pendingRequests.length}</MsPill>}
+          />
+          <div className="space-y-2 p-5 pt-0">
             {pendingRequests.map((user) => (
               <div
                 key={user.id}
-                className="flex items-center gap-3 rounded-xl border border-amber-200/60 bg-white/70 p-3 dark:border-slate-600 dark:bg-slate-900/50"
+                className="flex items-center gap-3 rounded-xl border border-ms-line bg-ms-tint p-3"
               >
-                <Avatar
-                  initials={user.username.slice(0, 2).toUpperCase()}
-                  color="#F7B731"
-                />
+                <Avatar initials={user.username.slice(0, 2).toUpperCase()} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{formatUsername(user.username)}</p>
-                  <p className="text-xs text-muted-foreground">Waiting for response</p>
+                  <p className="truncate font-medium text-ms-ink">
+                    {formatUsername(user.username)}
+                  </p>
+                  <p className="text-xs text-ms-ink3">Waiting for response</p>
                 </div>
-                <Badge variant="outline" className="border-amber-300 text-amber-700">
-                  Pending
-                </Badge>
+                <MsPill tone="warning">Pending</MsPill>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </MsCard>
       )}
 
       {requests.length > 0 && (
-        <Card className="ms-card-accent overflow-hidden border-0 bg-gradient-to-br from-[#7F77DD]/10 via-white to-[#378ADD]/10 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              Friend requests
-              <Badge className="bg-[#7F77DD] text-white">{requests.length}</Badge>
-            </CardTitle>
-            <CardDescription>People who want to connect with you</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <MsCard>
+          <MsCardHeader
+            title="Friend requests"
+            meta="People who want to connect with you"
+            action={<MsPill tone="brand">{requests.length}</MsPill>}
+          />
+          <div className="space-y-3 p-5 pt-0">
             {requests.map((req) => (
               <div
                 key={req.id}
-                className="flex flex-wrap items-center gap-3 rounded-xl border border-[#7F77DD]/25 bg-white/90 p-4 shadow-sm dark:border-slate-600 dark:bg-slate-900/70"
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-ms-line bg-ms-tint p-4"
               >
-                <Avatar initials={req.initials} color={req.color} />
+                <Avatar initials={req.initials} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-semibold text-navy dark:text-slate-100">
-                    {req.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Wants to be your friend</p>
+                  <p className="truncate text-base font-semibold text-ms-ink">{req.name}</p>
+                  <p className="text-xs text-ms-ink3">Wants to be your friend</p>
                 </div>
                 <div className="flex w-full gap-2 sm:w-auto">
-                  <Button
+                  <MsButton
                     size="sm"
                     disabled={actionLoading === `accept-${req.id}`}
-                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm sm:flex-none"
+                    className="flex-1 sm:flex-none"
+                    icon={
+                      actionLoading === `accept-${req.id}` ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )
+                    }
                     onClick={() => accept(req)}
                   >
-                    {actionLoading === `accept-${req.id}` ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        Accept
-                      </>
-                    )}
-                  </Button>
-                  <Button
+                    Accept
+                  </MsButton>
+                  <MsButton
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={actionLoading === `ignore-${req.id}`}
                     className="flex-1 sm:flex-none"
+                    icon={
+                      actionLoading === `ignore-${req.id}` ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <X className="h-3.5 w-3.5" />
+                      )
+                    }
                     onClick={async () => {
                       setActionLoading(`ignore-${req.id}`);
                       try {
@@ -418,41 +378,32 @@ export default function FriendsScreen() {
                       }
                     }}
                   >
-                    {actionLoading === `ignore-${req.id}` ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <X className="h-3.5 w-3.5" />
-                        Ignore
-                      </>
-                    )}
-                  </Button>
+                    Ignore
+                  </MsButton>
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </MsCard>
       )}
 
-      <Card className="ms-card-accent border-0 bg-white dark:bg-slate-800/80">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-4 w-4 text-navy" />
-            Your friends
-            <Badge variant="secondary">{friends.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <MsCard>
+        <MsCardHeader
+          title="Your friends"
+          meta={`${friends.length} connected`}
+          icon={<Users size={16} />}
+        />
+        <div className="space-y-3 p-5 pt-0">
           {friends.length > 3 && (
             <Input
               placeholder="Filter your friends…"
               value={friendFilter}
               onChange={(e) => setFriendFilter(e.target.value)}
-              className="h-9"
+              className="h-9 border-ms-line bg-ms-tint"
             />
           )}
           {filtered.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
+            <p className="py-6 text-center text-sm text-ms-ink2">
               {friends.length === 0
                 ? "No friends yet — search above to add someone."
                 : "No friends match your filter."}
@@ -462,47 +413,29 @@ export default function FriendsScreen() {
             <button
               key={f.id}
               type="button"
-              className="flex w-full items-center gap-3 rounded-xl border border-line/70 bg-gradient-to-r from-white to-[#f8fafc] p-3 text-left transition hover:border-[#378ADD]/30 hover:shadow-sm dark:border-slate-700 dark:from-slate-900 dark:to-slate-800"
+              className="flex w-full items-center gap-3 rounded-xl border border-ms-line bg-ms-card p-3 text-left transition-colors hover:border-ms-line-strong hover:bg-ms-tint"
               onClick={() => setSelectedFriend(f)}
             >
-              <Avatar initials={f.initials} color={f.color} />
+              <Avatar initials={f.initials} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-navy dark:text-slate-100">
-                  {f.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {f.match}% mood match
-                </p>
+                <p className="truncate font-semibold text-ms-ink">{f.name}</p>
+                <p className="text-xs text-ms-ink3">{f.match}% mood match</p>
               </div>
-              <Badge
-                variant="outline"
-                style={{
-                  borderColor: `${f.moodColor}55`,
-                  color: f.moodColor,
-                  backgroundColor: `${f.moodColor}12`,
-                }}
-              >
-                {f.mood}
-              </Badge>
+              <MsPill tone="brand">{f.mood}</MsPill>
             </button>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </MsCard>
 
-      <Card className="ms-card-accent border-0 bg-gradient-to-br from-white to-[#eef2ff] dark:from-slate-800 dark:to-slate-900">
-        <CardHeader>
-          <CardTitle className="text-base">Privacy controls</CardTitle>
-          <CardDescription>
-            Choose what friends can see about you
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <MsCard>
+        <MsCardHeader title="Privacy controls" meta="Choose what friends can see about you" />
+        <div className="space-y-3 p-5 pt-0">
           {PRIVACY.map((p) => (
             <div
               key={p.key}
-              className="flex items-center justify-between gap-3 rounded-lg border border-line/60 bg-white/60 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40"
+              className="flex items-center justify-between gap-3 rounded-xl border border-ms-line bg-ms-tint px-3.5 py-3"
             >
-              <Label htmlFor={`privacy-${p.key}`} className="font-normal">
+              <Label htmlFor={`privacy-${p.key}`} className="font-normal text-ms-ink">
                 {p.label}
               </Label>
               <Switch
@@ -527,8 +460,8 @@ export default function FriendsScreen() {
               />
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </MsCard>
 
       <Dialog
         open={!!selectedFriend}
@@ -540,39 +473,30 @@ export default function FriendsScreen() {
           }
         }}
       >
-        <DialogContent className="border-0 bg-gradient-to-br from-white to-[#f0f9ff] sm:max-w-md dark:from-slate-900 dark:to-slate-800">
+        <DialogContent className="border-ms-line bg-ms-card sm:max-w-md">
           {selectedFriend && (
             <>
               <DialogHeader className="items-center text-center">
-                <Avatar
-                  initials={selectedFriend.initials}
-                  color={selectedFriend.color}
-                  size="lg"
-                />
-                <DialogTitle className="pt-2">{selectedFriend.name}</DialogTitle>
+                <Avatar initials={selectedFriend.initials} size="lg" />
+                <DialogTitle className="pt-2 text-ms-ink">{selectedFriend.name}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-900/50">
-                  <span className="text-muted-foreground">Current mood</span>
-                  <strong style={{ color: selectedFriend.moodColor }}>
-                    {selectedFriend.mood}
-                  </strong>
+                <div className="flex justify-between rounded-xl bg-ms-tint px-3 py-2">
+                  <span className="text-ms-ink2">Current mood</span>
+                  <strong className="text-ms-navy">{selectedFriend.mood}</strong>
                 </div>
-                <div className="flex justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-900/50">
-                  <span className="text-muted-foreground">Mood match</span>
-                  <strong className="text-[#378ADD]">{selectedFriend.match}%</strong>
+                <div className="flex justify-between rounded-xl bg-ms-tint px-3 py-2">
+                  <span className="text-ms-ink2">Mood match</span>
+                  <strong className="text-ms-navy">{selectedFriend.match}%</strong>
                 </div>
-                <div className="flex justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-900/50">
-                  <span className="text-muted-foreground">Status</span>
-                  <strong className="text-emerald-600">Mutual friend</strong>
+                <div className="flex justify-between rounded-xl bg-ms-tint px-3 py-2">
+                  <span className="text-ms-ink2">Status</span>
+                  <strong className="text-ms-emerald">Mutual friend</strong>
                 </div>
               </div>
-              <Button
-                onClick={() => openMoodTrend(selectedFriend)}
-                className="bg-gradient-to-r from-navy to-[#378ADD]"
-              >
+              <MsButton block onClick={() => openMoodTrend(selectedFriend)}>
                 View mood trends
-              </Button>
+              </MsButton>
               {showTrend && trendData.length > 0 && (
                 <div className="pt-2">
                   <FriendMoodChart data={trendData} />
