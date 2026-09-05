@@ -418,11 +418,11 @@ export default function FriendsScreen() {
 
       <MsCard>
         <MsCardHeader title="Privacy controls" meta="Choose what friends can see about you" />
-        <div className="space-y-3 p-5 pt-0">
+        <div className="space-y-2 px-5 pb-5 pt-3">
           {PRIVACY.map((p) => (
             <div
               key={p.key}
-              className="flex items-center justify-between gap-3 rounded-xl border border-ms-line bg-ms-tint px-3.5 py-3"
+              className="flex items-center justify-between gap-4 rounded-xl border border-ms-line bg-ms-tint py-3.5 pr-4"
             >
               <Label htmlFor={`privacy-${p.key}`} className="font-normal text-ms-ink">
                 {p.label}
