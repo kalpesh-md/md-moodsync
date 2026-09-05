@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { MsButton } from "@/components/ui/ms/MsButton";
 import { MsCard } from "@/components/ui/ms/MsCard";
 import { MsEmptyState } from "@/components/ui/ms/MsEmptyState";
+import { MsButton } from "@/components/ui/ms/MsButton";
 
 interface EmptyStateProps {
   icon: ReactNode;
@@ -21,26 +21,29 @@ export function EmptyState({
   secondaryAction,
 }: EmptyStateProps) {
   return (
-    <MsCard>
-      <div className="p-5">
+    <MsCard elevated>
+      <div className="p-6">
         <MsEmptyState
           icon={icon}
-          message={`${title}. ${description}`}
+          message={title}
           action={
-            action || secondaryAction ? (
-              <div className="flex flex-wrap justify-center gap-2">
-                {action && (
-                  <MsButton size="sm" onClick={action.onClick}>
-                    {action.label}
-                  </MsButton>
-                )}
-                {secondaryAction && (
-                  <MsButton variant="secondary" size="sm" onClick={secondaryAction.onClick}>
-                    {secondaryAction.label}
-                  </MsButton>
-                )}
-              </div>
-            ) : undefined
+            <div className="space-y-3">
+              <p className="max-w-[42ch] text-sm text-ms-ink2">{description}</p>
+              {(action || secondaryAction) && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {action && (
+                    <MsButton size="sm" onClick={action.onClick}>
+                      {action.label}
+                    </MsButton>
+                  )}
+                  {secondaryAction && (
+                    <MsButton variant="secondary" size="sm" onClick={secondaryAction.onClick}>
+                      {secondaryAction.label}
+                    </MsButton>
+                  )}
+                </div>
+              )}
+            </div>
           }
         />
       </div>

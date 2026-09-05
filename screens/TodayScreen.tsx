@@ -3,7 +3,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
-  Check,
   Download,
   Footprints,
   Heart,
@@ -21,51 +20,14 @@ import { connectGoogleFit } from "@/lib/api/googlefit";
 import type { Checkin } from "@/lib/api/checkins";
 import { MsButton } from "@/components/ui/ms/MsButton";
 import { MsCard, MsCardHeader } from "@/components/ui/ms/MsCard";
+import { MetricTile } from "@/components/ui/ms/MetricTile";
 import { MsPill } from "@/components/ui/ms/MsPill";
+import { MsProgress } from "@/components/ui/ms/MsProgress";
+import { PageHeader, SectionHeading } from "@/components/ui/ms/PageHeader";
+import { ScoreRing } from "@/components/ui/ms/ScoreRing";
+import { WeekStreak } from "@/components/ui/ms/WeekStreak";
 import { formatMoodLabel } from "@/lib/utils";
 import { queryKeys, useMoodSync } from "@/lib/hooks/queries";
-
-const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
-const CIRC = 2 * Math.PI * 44;
-
-function ScoreRing({ score, loading }: { score: number | null; loading: boolean }) {
-  const display = score ?? 0;
-
-  return (
-    <div className="relative h-24 w-24 shrink-0">
-      <svg viewBox="0 0 100 100" className="h-24 w-24 -rotate-90">
-        <circle cx="50" cy="50" r="44" fill="none" className="stroke-ms-soft" strokeWidth="9" />
-        {!loading && score != null && (
-          <circle
-            cx="50"
-            cy="50"
-            r="44"
-            fill="none"
-            className="stroke-ms-navy"
-            strokeWidth="9"
-            strokeLinecap="round"
-            strokeDasharray={CIRC}
-            strokeDashoffset={CIRC * (1 - Math.min(100, Math.max(0, display)) / 100)}
-          />
-        )}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        {loading ? (
-          <Loader2 className="h-6 w-6 animate-spin text-ms-mid" />
-        ) : (
-          <>
-            <span className="text-2xl font-bold leading-none text-ms-ink">
-              {score != null ? Math.round(score) : "—"}
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-ms-ink3">
-              score
-            </span>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 interface TodayScreenProps {
   checkins: boolean[];
@@ -76,7 +38,6 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   const notice = useNotice();
   const queryClient = useQueryClient();
   const { data: syncData, isPending, isFetching, isError } = useMoodSync();
-  const count = checkins.filter(Boolean).length;
   const moodScore = syncData?.moodScore ?? null;
   const spotifyConnected = syncData?.integrations?.spotify ?? false;
   const fitConnected = syncData?.integrations?.googleFit ?? false;
@@ -184,42 +145,42 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="mb-1 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ms-ink3">
-            Today
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-ms-ink">
-            Your mood right now
-          </h2>
-          <p className="mt-1 text-sm text-ms-ink2">
-            Live mood from check-ins, Spotify, and Google Fit
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <MsButton variant="secondary" size="sm" icon={<Download className="h-4 w-4" />} onClick={exportMoodData}>
-            Export
-          </MsButton>
-          <MsButton
-            size="sm"
-            onClick={() => handleSync()}
-            disabled={syncing}
-            icon={
-              syncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )
-            }
-          >
-            Sync
-          </MsButton>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Today"
+        title="Your mood right now"
+        subtitle="Live mood from check-ins, Spotify, and Google Fit"
+        icon={<Sparkles className="h-5 w-5" />}
+        actions={
+          <>
+            <MsButton
+              variant="secondary"
+              size="sm"
+              icon={<Download className="h-4 w-4" />}
+              onClick={exportMoodData}
+            >
+              Export
+            </MsButton>
+            <MsButton
+              size="sm"
+              onClick={() => handleSync()}
+              disabled={syncing}
+              icon={
+                syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )
+              }
+            >
+              Sync
+            </MsButton>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <MsCard>
+      <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        <MsCard elevated>
           <MsCardHeader
             title="Mood score"
             meta={
@@ -228,108 +189,47 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
                 : "No check-in today yet — tap Check in above"
             }
             icon={<Sparkles size={16} />}
+            action={
+              moodScore != null ? (
+                <MsPill tone={moodScore >= 60 ? "success" : moodScore >= 40 ? "brand" : "warning"}>
+                  {moodScore >= 60 ? "Positive" : moodScore >= 40 ? "Neutral" : "Low"}
+                </MsPill>
+              ) : undefined
+            }
           />
-          <div className="space-y-4 p-5">
-            <div className="flex items-center gap-4">
-              <ScoreRing score={moodScore} loading={syncing && moodScore == null} />
+          <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center">
+            <ScoreRing score={moodScore} loading={syncing && moodScore == null} size="lg" />
+            <div className="min-w-0 flex-1 space-y-3">
               <div>
-                <p className="text-sm font-semibold text-ms-ink">
+                <p className="text-lg font-semibold text-ms-ink">
                   {moodScore != null ? `Mood score ${Math.round(moodScore)}` : "Calculating…"}
                 </p>
-                <p className="mt-1 text-xs text-ms-ink3">out of 100</p>
-                {moodScore != null && (
-                  <MsPill tone="brand" className="mt-2">
-                    {moodScore >= 60 ? "Positive" : moodScore >= 40 ? "Neutral" : "Low"}
-                  </MsPill>
-                )}
+                <p className="mt-1 text-sm text-ms-ink2">Combined from your latest signals · out of 100</p>
               </div>
+              {moodScore != null && <MsProgress value={moodScore} size="md" />}
             </div>
-            {moodScore != null && (
-              <div className="h-2 overflow-hidden rounded-full bg-ms-soft">
-                <div
-                  className="h-full rounded-full bg-ms-navy transition-all"
-                  style={{ width: `${moodScore}%` }}
-                />
-              </div>
-            )}
           </div>
         </MsCard>
 
-        <MsCard className="p-5">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ms-amber-soft text-ms-amber">
-              <Activity size={20} />
-            </span>
-            <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold leading-none tracking-tight text-ms-ink">
-                  {count}
-                </span>
-                <span className="text-sm font-semibold text-ms-ink2">days this week</span>
-              </div>
-              <p className="mt-1 text-xs text-ms-ink3">{count} of 7 days checked in</p>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-1.5">
-            {DAYS.map((d, i) => {
-              const done = checkins[i];
-              return (
-                <div key={`${d}-${i}`} className="flex flex-col items-center gap-1">
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold ${
-                      done
-                        ? "bg-ms-navy text-white"
-                        : "border border-dashed border-ms-line-strong text-ms-ink3"
-                    }`}
-                  >
-                    {done ? <Check size={13} /> : d}
-                  </span>
-                  <span className="text-[10px] font-semibold text-ms-ink3">{d}</span>
-                </div>
-              );
-            })}
-          </div>
-        </MsCard>
+        <WeekStreak checkins={checkins} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {signals.map((s) => {
-          const Icon = s.icon;
-          return (
-            <MsCard key={s.label}>
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-ms-soft text-ms-navy">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-ms-ink3">
-                      {s.label}
-                    </span>
-                  </div>
-                  {s.action && (
-                    <MsButton variant="secondary" size="sm" onClick={s.action}>
-                      {s.actionLabel}
-                    </MsButton>
-                  )}
-                </div>
-                <div className="mt-2 truncate text-lg font-bold leading-none text-ms-ink">
-                  {s.value}
-                </div>
-                <div className="mt-1 text-[11px] text-ms-ink3">{s.detail}</div>
-              </div>
-            </MsCard>
-          );
-        })}
+      <div className="space-y-3">
+        <SectionHeading title="Health signals" meta="Synced from Spotify & Google Fit" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {signals.map((s) => (
+            <MetricTile key={s.label} {...s} />
+          ))}
+        </div>
       </div>
 
-      <MsCard>
+      <MsCard elevated>
         <MsCardHeader
           title="Mood clock"
           meta="Your day mapped by mood periods"
           icon={<Activity size={16} />}
         />
-        <div className="p-5">
+        <div className="bg-ms-tint/20 p-5">
           <MoodClock />
         </div>
       </MsCard>

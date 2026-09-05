@@ -74,35 +74,37 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-        <button
-          type="button"
-          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          onClick={toggleTheme}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-ms-ink2 transition-colors hover:bg-ms-tint hover:text-ms-navy"
-        >
-          {isDark ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
-        {spotifyConnected ? (
-          <MsPill tone="success" icon={<Check className="h-3 w-3" />}>
-            <span className="hidden sm:inline">Spotify</span>
-            <span className="sm:hidden">Sp</span>
-          </MsPill>
-        ) : (
-          <MsButton variant="secondary" size="sm" icon={<Music2 className="h-3.5 w-3.5" />} onClick={connectSpotify}>
-            <span className="hidden sm:inline">Spotify</span>
-          </MsButton>
-        )}
-        {fitConnected ? (
-          <MsPill tone="success" icon={<Check className="h-3 w-3" />}>
-            <span className="hidden sm:inline">Fit</span>
-            <span className="sm:hidden">Fit</span>
-          </MsPill>
-        ) : (
-          <MsButton variant="secondary" size="sm" icon={<Activity className="h-3.5 w-3.5" />} onClick={connectGoogleFit}>
-            <span className="hidden sm:inline">Fit</span>
-          </MsButton>
-        )}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex items-center gap-1 rounded-2xl border border-ms-line bg-ms-tint/60 p-1">
+          <button
+            type="button"
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={toggleTheme}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-ms-ink2 transition-colors hover:bg-ms-card hover:text-ms-navy"
+          >
+            {isDark ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          {spotifyConnected ? (
+            <MsPill tone="success" icon={<Check className="h-3 w-3" />}>
+              <span className="hidden sm:inline">Spotify</span>
+              <span className="sm:hidden">Sp</span>
+            </MsPill>
+          ) : (
+            <MsButton variant="ghost" size="sm" icon={<Music2 className="h-3.5 w-3.5" />} onClick={connectSpotify}>
+              <span className="hidden sm:inline">Spotify</span>
+            </MsButton>
+          )}
+          {fitConnected ? (
+            <MsPill tone="success" icon={<Check className="h-3 w-3" />}>
+              <span className="hidden sm:inline">Fit</span>
+              <span className="sm:hidden">Fit</span>
+            </MsPill>
+          ) : (
+            <MsButton variant="ghost" size="sm" icon={<Activity className="h-3.5 w-3.5" />} onClick={connectGoogleFit}>
+              <span className="hidden sm:inline">Fit</span>
+            </MsButton>
+          )}
+        </div>
         <MsButton size="sm" onClick={onCheckIn}>
           <span className="text-xs sm:text-sm">Check in</span>
         </MsButton>

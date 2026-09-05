@@ -83,14 +83,17 @@ export default function CheckInModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto border-ms-line bg-ms-card sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-ms-ink">How are you feeling?</DialogTitle>
-          <DialogDescription className="text-ms-ink2">
-            Select one or more moods — this trains your personal mood model.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-h-[90vh] overflow-y-auto border-ms-line bg-ms-card p-0 sm:max-w-md">
+        <div className="border-b border-ms-line bg-ms-tint/40 px-6 py-5">
+          <DialogHeader className="space-y-1.5 text-left">
+            <DialogTitle className="text-xl font-semibold text-ms-ink">How are you feeling?</DialogTitle>
+            <DialogDescription className="text-ms-ink2">
+              Select one or more moods — this trains your personal mood model.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
+        <div className="space-y-5 px-6 py-5">
         <div className="grid grid-cols-4 gap-2">
           {MOODS.map((m) => {
             const isSelected = selected.includes(m.name);
@@ -171,8 +174,9 @@ export default function CheckInModal({
             </div>
           ))}
         </div>
+        </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2 border-t border-ms-line bg-ms-tint/30 px-6 py-4 sm:gap-0">
           <MsButton variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </MsButton>

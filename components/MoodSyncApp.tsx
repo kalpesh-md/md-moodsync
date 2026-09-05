@@ -167,21 +167,23 @@ function MoodSyncShell() {
   }
 
   return (
-    <div className="ms-canvas relative min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-ms-line bg-ms-card/80 px-4 py-3 backdrop-blur-md md:px-6 md:py-4">
+    <div className="ms-canvas relative flex h-dvh flex-col overflow-hidden">
+      <header className="z-30 shrink-0 border-b border-ms-line bg-ms-card/80 px-4 py-3 backdrop-blur-md md:px-6 md:py-4">
         <TopBar onCheckIn={() => setCheckInOpen(true)} />
       </header>
 
-      <div className="flex items-start gap-5 px-4 pb-24 md:gap-6 md:px-6 md:pb-12">
-        <aside className="sticky top-[80px] z-20 hidden h-[calc(100dvh-104px)] w-[236px] shrink-0 md:block">
+      <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-4 pb-20 md:gap-6 md:px-6 md:pb-6">
+        <aside className="hidden h-full w-[236px] shrink-0 md:block">
           <NavBar variant="desktop" active={activeScreen} onChange={setActiveScreen} />
         </aside>
-        <main className="min-h-[calc(100dvh-96px)] min-w-0 flex-1">
-          {SCREEN_IDS.map((id) => (
-            <div key={id} className={activeScreen === id ? "block" : "hidden"}>
-              {screens[id]}
-            </div>
-          ))}
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="py-5 md:py-6">
+            {SCREEN_IDS.map((id) => (
+              <div key={id} className={activeScreen === id ? "block" : "hidden"}>
+                {screens[id]}
+              </div>
+            ))}
+          </div>
         </main>
       </div>
       <NavBar variant="mobile" active={activeScreen} onChange={setActiveScreen} />

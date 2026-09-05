@@ -17,7 +17,9 @@ import {
 import type { FriendUser, MoodTrendPoint } from "@/lib/api/friends";
 import { MsButton } from "@/components/ui/ms/MsButton";
 import { MsCard, MsCardHeader } from "@/components/ui/ms/MsCard";
+import { MsListRow } from "@/components/ui/ms/MsListRow";
 import { MsPill } from "@/components/ui/ms/MsPill";
+import { PageHeader } from "@/components/ui/ms/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -74,8 +76,8 @@ function Avatar({
     <div
       className={
         size === "lg"
-          ? "flex h-20 w-20 items-center justify-center rounded-full bg-ms-navy text-xl font-semibold text-white ring-4 ring-ms-card"
-          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ms-navy text-sm font-semibold text-white"
+          ? "flex h-20 w-20 items-center justify-center rounded-full bg-ms-navy text-xl font-semibold text-white shadow-[0_4px_16px_rgba(30,58,95,0.25)] ring-4 ring-ms-card"
+          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ms-navy text-sm font-semibold text-white shadow-[0_2px_8px_rgba(30,58,95,0.2)]"
       }
     >
       {initials}
@@ -205,20 +207,15 @@ export default function FriendsScreen() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ms-soft text-ms-navy">
-          <Users className="h-5 w-5" />
-        </span>
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight text-ms-ink">Friends</h2>
-          <p className="text-sm text-ms-ink2">
-            Find people, manage requests, and share mood safely
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Friends"
+        title="Your circle"
+        subtitle="Find people, manage requests, and share mood safely"
+        icon={<Users className="h-5 w-5" />}
+      />
 
-      <MsCard>
+      <MsCard elevated>
         <MsCardHeader
           title="Find friends"
           meta="Search by username to send a request"
@@ -241,10 +238,7 @@ export default function FriendsScreen() {
           {searchResults.length > 0 && (
             <div className="mt-3 space-y-2">
               {searchResults.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center gap-3 rounded-xl border border-ms-line bg-ms-tint p-3"
-                >
+                <MsListRow key={user.id}>
                   <Avatar initials={user.username.slice(0, 2).toUpperCase()} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-ms-ink">
@@ -285,7 +279,7 @@ export default function FriendsScreen() {
                   >
                     Add
                   </MsButton>
-                </div>
+                </MsListRow>
               ))}
             </div>
           )}
@@ -410,19 +404,14 @@ export default function FriendsScreen() {
             </p>
           )}
           {filtered.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className="flex w-full items-center gap-3 rounded-xl border border-ms-line bg-ms-card p-3 text-left transition-colors hover:border-ms-line-strong hover:bg-ms-tint"
-              onClick={() => setSelectedFriend(f)}
-            >
+            <MsListRow key={f.id} as="button" onClick={() => setSelectedFriend(f)}>
               <Avatar initials={f.initials} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-ms-ink">{f.name}</p>
                 <p className="text-xs text-ms-ink3">{f.match}% mood match</p>
               </div>
               <MsPill tone="brand">{f.mood}</MsPill>
-            </button>
+            </MsListRow>
           ))}
         </div>
       </MsCard>

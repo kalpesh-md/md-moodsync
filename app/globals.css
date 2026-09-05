@@ -114,6 +114,15 @@
   .ms-card-accent {
     @apply shadow-card transition-shadow hover:shadow-lift;
   }
+
+  .ms-icon-ring {
+    box-shadow: inset 0 0 0 1px rgba(30, 58, 95, 0.06);
+  }
+
+  .ms-tip-list li {
+    @apply relative pl-4 text-ms-ink2 before:absolute before:left-0 before:top-[0.55em] before:h-1 before:w-1 before:rounded-full before:bg-ms-navy/40;
+    list-style: none;
+  }
 }
 
 @layer components {

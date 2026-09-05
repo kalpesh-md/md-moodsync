@@ -5,6 +5,8 @@ import { InsightsPageSkeleton } from "@/components/Skeletons";
 import { EmptyState } from "@/components/EmptyState";
 import { MsCard, MsCardHeader } from "@/components/ui/ms/MsCard";
 import { MsPill } from "@/components/ui/ms/MsPill";
+import { MsProgress } from "@/components/ui/ms/MsProgress";
+import { PageHeader } from "@/components/ui/ms/PageHeader";
 import { useCheckins, usePersonality } from "@/lib/hooks/queries";
 import { getCheckinMoods } from "@/lib/checkinMoods";
 import { formatMoodLabel } from "@/lib/utils";
@@ -79,8 +81,13 @@ export default function InsightsScreen() {
 
   if (checkinCount === 0 && source !== "ai") {
     return (
-      <div className="space-y-5">
-        <PageHeader qualityLabel={qualityLabel} />
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Insights"
+          title="Personality insights"
+          subtitle={qualityLabel}
+          icon={<Brain className="h-5 w-5" />}
+        />
         <EmptyState
           icon={<Sparkles className="h-[17px] w-[17px]" />}
           title="No check-ins yet"
@@ -91,39 +98,39 @@ export default function InsightsScreen() {
   }
 
   return (
-    <div className="space-y-5">
-      <PageHeader qualityLabel={qualityLabel} />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Insights"
+        title="Personality insights"
+        subtitle={qualityLabel}
+        icon={<Brain className="h-5 w-5" />}
+      />
 
       {source !== "ai" && (
-        <p className="rounded-xl border border-ms-line bg-ms-tint px-3 py-2 text-xs text-ms-ink2">
+        <div className="rounded-2xl border border-ms-line bg-ms-tint px-4 py-3 text-sm leading-relaxed text-ms-ink2">
           {source === "insufficient"
             ? "We show a light trait sketch from your moods. A fuller personality read — including MBTI — needs about five check-ins."
             : "This is a mood-based sketch, not a clinical profile. We skip MBTI rather than invent a type."}
-        </p>
+        </div>
       )}
 
       {moodPattern.length > 0 && (
-        <MsCard>
+        <MsCard elevated>
           <MsCardHeader
             title="Mood mix"
             meta="From your logged check-ins"
             icon={<Sparkles size={16} />}
           />
-          <div className="space-y-3 p-5 pt-0">
+          <div className="space-y-4 p-5 pt-0">
             {moodPattern.slice(0, 6).map((row) => (
-              <div key={row.label} className="space-y-1">
+              <div key={row.label} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium capitalize text-ms-ink">
                     {formatMoodLabel(row.label)}
                   </span>
-                  <span className="text-xs text-ms-ink3">{row.count}</span>
+                  <MsPill tone="neutral">{row.count}</MsPill>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-ms-soft">
-                  <div
-                    className="h-full rounded-full bg-ms-navy"
-                    style={{ width: `${Math.round((row.count / maxMood) * 100)}%` }}
-                  />
-                </div>
+                <MsProgress value={(row.count / maxMood) * 100} />
               </div>
             ))}
           </div>
@@ -131,30 +138,27 @@ export default function InsightsScreen() {
       )}
 
       {mbti?.type && source === "ai" && (
-        <MsCard>
-          <div className="flex items-start justify-between gap-3 p-5">
+        <MsCard elevated>
+          <div className="flex items-start justify-between gap-3 border-b border-ms-line bg-ms-tint/40 p-5">
             <div>
-              <p className="text-xs text-ms-ink3">MBTI estimate</p>
-              <p className="mt-1 text-3xl font-bold tracking-tight text-ms-ink">{mbti.type}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ms-ink3">
+                MBTI estimate
+              </p>
+              <p className="mt-1 text-4xl font-bold tracking-tight text-ms-ink">{mbti.type}</p>
             </div>
             <MsPill tone="brand">{mbti.confidence}% confidence</MsPill>
           </div>
           {axes && (
-            <div className="space-y-3 border-t border-ms-line px-5 pb-5 pt-4">
+            <div className="space-y-4 p-5">
               {[
                 { left: "I", right: "E", value: axes.IE },
                 { left: "N", right: "S", value: axes.NS },
                 { left: "T", right: "F", value: axes.TF },
                 { left: "J", right: "P", value: axes.JP },
               ].map((row) => (
-                <div key={row.left} className="flex items-center gap-3 text-xs font-medium">
+                <div key={row.left} className="flex items-center gap-3 text-xs font-semibold">
                   <span className="w-4 text-ms-ink3">{row.left}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-ms-soft">
-                    <div
-                      className="h-full rounded-full bg-ms-navy"
-                      style={{ width: `${row.value}%` }}
-                    />
-                  </div>
+                  <MsProgress value={row.value} size="md" className="flex-1" />
                   <span className="w-4 text-right text-ms-ink3">{row.right}</span>
                 </div>
               ))}
@@ -164,7 +168,7 @@ export default function InsightsScreen() {
       )}
 
       {ocean && (
-        <MsCard>
+        <MsCard elevated>
           <MsCardHeader
             title="Big Five traits"
             meta={
@@ -174,27 +178,20 @@ export default function InsightsScreen() {
             }
             icon={<Brain size={16} />}
           />
-          <div className="space-y-5 p-5 pt-0">
+          <div className="space-y-6 p-5 pt-0">
             {OCEAN_TRAITS.map((trait) => {
               const value = Math.max(0, Math.min(100, ocean[trait.key] ?? 0));
               return (
-                <div key={trait.key} className="space-y-1.5">
+                <div key={trait.key} className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <MsPill tone="brand">{trait.key}</MsPill>
-                      <span className="text-sm font-medium text-ms-ink">{trait.name}</span>
+                      <span className="text-sm font-semibold text-ms-ink">{trait.name}</span>
                     </div>
-                    <span className="text-xs font-semibold tabular-nums text-ms-navy">
-                      {value}
-                    </span>
+                    <span className="text-sm font-bold tabular-nums text-ms-navy">{value}</span>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-ms-soft">
-                    <div
-                      className="h-full rounded-full bg-ms-navy transition-all"
-                      style={{ width: `${value}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-ms-ink3">{trait.description}</p>
+                  <MsProgress value={value} size="md" />
+                  <p className="text-xs leading-relaxed text-ms-ink3">{trait.description}</p>
                 </div>
               );
             })}
@@ -205,35 +202,21 @@ export default function InsightsScreen() {
       {insightCards.length > 0 && (
         <div className="grid gap-3 md:grid-cols-3">
           {insightCards.map((insight, idx) => (
-            <MsCard key={`${insight.head}-${idx}`}>
-              <div className="p-4">
+            <MsCard key={`${insight.head}-${idx}`} interactive>
+              <div className="border-b border-ms-line bg-ms-tint/30 px-4 py-3">
                 <h3 className="text-sm font-semibold text-ms-ink">{insight.head}</h3>
-                <p className="mt-2 text-sm text-ms-ink2">{insight.body}</p>
+              </div>
+              <div className="p-4">
+                <p className="text-sm leading-relaxed text-ms-ink2">{insight.body}</p>
               </div>
             </MsCard>
           ))}
         </div>
       )}
 
-      <p className="text-xs text-ms-ink3">
+      <p className="px-1 text-xs leading-relaxed text-ms-ink3">
         Insights are estimates from MoodSync data, not a clinical assessment.
       </p>
-    </div>
-  );
-}
-
-function PageHeader({ qualityLabel }: { qualityLabel: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ms-soft text-ms-navy">
-        <Brain className="h-5 w-5" />
-      </span>
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight text-ms-ink">
-          Personality insights
-        </h2>
-        <p className="text-sm text-ms-ink2">{qualityLabel}</p>
-      </div>
     </div>
   );
 }
