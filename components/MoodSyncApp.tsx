@@ -64,6 +64,20 @@ function shouldPromptCheckIn(latestCheckin: Checkin | null): boolean {
   return lastDate.toDateString() !== today.toDateString();
 }
 
+function checkinPromptStorageKey(): string {
+  return `moodsync_checkin_prompt_${new Date().toDateString()}`;
+}
+
+function wasCheckinPromptHandledToday(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(checkinPromptStorageKey()) === "1";
+}
+
+function markCheckinPromptHandledToday(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(checkinPromptStorageKey(), "1");
+}
+
 function MoodSyncShell() {
   const notice = useNotice();
   const queryClient = useQueryClient();
@@ -76,7 +90,7 @@ function MoodSyncShell() {
   const shownConnectNotice = useRef(false);
 
   const { data: checkinsList = [] } = useCheckins(isLoggedIn);
-  const { data: latestCheckin = null } = useLatestCheckin(isLoggedIn);
+  const { data: latestCheckin, isFetched: latestCheckinReady } = useLatestCheckin(isLoggedIn);
 
   usePrefetchAppData(isLoggedIn);
 
@@ -86,7 +100,7 @@ function MoodSyncShell() {
   );
 
   const screens: Record<ScreenId, React.ReactNode> = {
-    today: <TodayScreen checkins={checkins} latest={latestCheckin} />,
+    today: <TodayScreen checkins={checkins} latest={latestCheckin ?? null} />,
     forecast: <ForecastScreen />,
     friends: <FriendsScreen />,
     insights: <InsightsScreen />,
@@ -101,6 +115,7 @@ function MoodSyncShell() {
     try {
       await createCheckin({ moods, note, shareWithFriends });
       setCheckInOpen(false);
+      markCheckinPromptHandledToday();
       invalidateCheckins();
       notice.success(
         "Check-in saved",
@@ -151,12 +166,24 @@ function MoodSyncShell() {
   }, [notice]);
 
   useEffect(() => {
-    if (!isLoggedIn || checkInPrompted) return;
-    if (latestCheckin !== undefined && shouldPromptCheckIn(latestCheckin)) {
-      setCheckInOpen(true);
+    if (!isLoggedIn || !latestCheckinReady || checkInPrompted) return;
+    if (wasCheckinPromptHandledToday()) {
       setCheckInPrompted(true);
+      return;
     }
-  }, [isLoggedIn, latestCheckin, checkInPrompted]);
+    if (shouldPromptCheckIn(latestCheckin ?? null)) {
+      setCheckInOpen(true);
+      markCheckinPromptHandledToday();
+    }
+    setCheckInPrompted(true);
+  }, [isLoggedIn, latestCheckin, latestCheckinReady, checkInPrompted]);
+
+  const handleCheckInOpenChange = (open: boolean) => {
+    setCheckInOpen(open);
+    if (!open) {
+      markCheckinPromptHandledToday();
+    }
+  };
 
   if (!authReady) {
     return <BrandLoader message="Loading MoodSync…" />;
@@ -172,12 +199,12 @@ function MoodSyncShell() {
         <TopBar onCheckIn={() => setCheckInOpen(true)} />
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-4 pb-20 md:gap-6 md:px-6 md:pb-6">
+      <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-4 pb-20 pt-6 md:gap-6 md:px-6 md:pb-6 md:pt-8">
         <aside className="hidden h-full w-[236px] shrink-0 md:block">
           <NavBar variant="desktop" active={activeScreen} onChange={setActiveScreen} />
         </aside>
         <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="py-5 md:py-6">
+          <div className="pb-6">
             {SCREEN_IDS.map((id) => (
               <div key={id} className={activeScreen === id ? "block" : "hidden"}>
                 {screens[id]}
@@ -190,7 +217,7 @@ function MoodSyncShell() {
 
       <CheckInModal
         open={checkInOpen}
-        onOpenChange={setCheckInOpen}
+        onOpenChange={handleCheckInOpenChange}
         onSave={handleCheckinSave}
         checkins={checkins}
       />

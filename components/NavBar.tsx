@@ -73,13 +73,12 @@ export default function NavBar({
 
   return (
     <nav className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-ms-line bg-ms-card shadow-card">
-      <div className="border-b border-ms-line px-4 py-4">
+      <div className="border-b border-ms-line px-4 py-3.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ms-ink3">
           Navigate
         </p>
-        <p className="mt-1 text-sm font-semibold text-ms-ink">MoodSync</p>
       </div>
-      <div className="flex flex-1 flex-col gap-1 p-3">
+      <div className="flex flex-1 flex-col gap-1 p-3 pt-4">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = active === item.id;
@@ -89,15 +88,12 @@ export default function NavBar({
               type="button"
               onClick={() => onChange(item.id)}
               className={cn(
-                "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all",
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all",
                 isActive
                   ? "bg-ms-navy font-semibold text-white shadow-[0_2px_10px_rgba(30,58,95,0.22)]"
                   : "font-medium text-ms-ink2 hover:bg-ms-tint hover:text-ms-ink",
               )}
             >
-              {isActive ? (
-                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-white/30" />
-              ) : null}
               <Icon className="h-[18px] w-[18px] shrink-0" />
               {item.label}
             </button>

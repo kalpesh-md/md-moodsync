@@ -39,6 +39,37 @@ const OCEAN_TRAITS = [
   },
 ];
 
+function TraitGauge({ value, label }: { value: number; label: string }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  const dash = 2 * Math.PI * 36;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative h-20 w-20">
+        <svg viewBox="0 0 88 88" className="h-20 w-20 -rotate-90">
+          <circle cx="44" cy="44" r="36" fill="none" className="stroke-ms-soft" strokeWidth="7" />
+          <circle
+            cx="44"
+            cy="44"
+            r="36"
+            fill="none"
+            className="stroke-ms-navy"
+            strokeWidth="7"
+            strokeLinecap="round"
+            strokeDasharray={dash}
+            strokeDashoffset={dash * (1 - clamped / 100)}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-bold leading-none text-ms-ink">{clamped}</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-ms-ink3">
+            {label}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InsightsScreen() {
   const { data: personality, isPending, isError, refetch } = usePersonality();
   const { data: checkins = [] } = useCheckins();
@@ -107,64 +138,11 @@ export default function InsightsScreen() {
       />
 
       {source !== "ai" && (
-        <div className="rounded-2xl border border-ms-line bg-ms-tint px-4 py-3 text-sm leading-relaxed text-ms-ink2">
+        <div className="rounded-2xl border border-ms-line bg-ms-tint px-5 py-4 text-sm leading-relaxed text-ms-ink2">
           {source === "insufficient"
             ? "We show a light trait sketch from your moods. A fuller personality read — including MBTI — needs about five check-ins."
             : "This is a mood-based sketch, not a clinical profile. We skip MBTI rather than invent a type."}
         </div>
-      )}
-
-      {moodPattern.length > 0 && (
-        <MsCard elevated>
-          <MsCardHeader
-            title="Mood mix"
-            meta="From your logged check-ins"
-            icon={<Sparkles size={16} />}
-          />
-          <div className="space-y-4 p-5 pt-0">
-            {moodPattern.slice(0, 6).map((row) => (
-              <div key={row.label} className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium capitalize text-ms-ink">
-                    {formatMoodLabel(row.label)}
-                  </span>
-                  <MsPill tone="neutral">{row.count}</MsPill>
-                </div>
-                <MsProgress value={(row.count / maxMood) * 100} />
-              </div>
-            ))}
-          </div>
-        </MsCard>
-      )}
-
-      {mbti?.type && source === "ai" && (
-        <MsCard elevated>
-          <div className="flex items-start justify-between gap-3 border-b border-ms-line bg-ms-tint/40 p-5">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ms-ink3">
-                MBTI estimate
-              </p>
-              <p className="mt-1 text-4xl font-bold tracking-tight text-ms-ink">{mbti.type}</p>
-            </div>
-            <MsPill tone="brand">{mbti.confidence}% confidence</MsPill>
-          </div>
-          {axes && (
-            <div className="space-y-4 p-5">
-              {[
-                { left: "I", right: "E", value: axes.IE },
-                { left: "N", right: "S", value: axes.NS },
-                { left: "T", right: "F", value: axes.TF },
-                { left: "J", right: "P", value: axes.JP },
-              ].map((row) => (
-                <div key={row.left} className="flex items-center gap-3 text-xs font-semibold">
-                  <span className="w-4 text-ms-ink3">{row.left}</span>
-                  <MsProgress value={row.value} size="md" className="flex-1" />
-                  <span className="w-4 text-right text-ms-ink3">{row.right}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </MsCard>
       )}
 
       {ocean && (
@@ -178,20 +156,40 @@ export default function InsightsScreen() {
             }
             icon={<Brain size={16} />}
           />
-          <div className="space-y-6 p-5 pt-0">
+          <div className="grid grid-cols-2 gap-3 border-b border-ms-line bg-ms-tint/30 p-6 sm:grid-cols-5">
+            {OCEAN_TRAITS.map((trait) => (
+              <TraitGauge
+                key={trait.key}
+                value={Math.max(0, Math.min(100, ocean[trait.key] ?? 0))}
+                label={trait.key}
+              />
+            ))}
+          </div>
+          <div className="space-y-4 p-6">
             {OCEAN_TRAITS.map((trait) => {
               const value = Math.max(0, Math.min(100, ocean[trait.key] ?? 0));
               return (
-                <div key={trait.key} className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <MsPill tone="brand">{trait.key}</MsPill>
-                      <span className="text-sm font-semibold text-ms-ink">{trait.name}</span>
+                <div
+                  key={trait.key}
+                  className="rounded-xl border border-ms-line bg-ms-tint/40 px-5 py-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <MsPill tone="brand">{trait.key}</MsPill>
+                        <span className="text-sm font-semibold text-ms-ink">{trait.name}</span>
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-ms-ink2">
+                        {trait.description}
+                      </p>
                     </div>
-                    <span className="text-sm font-bold tabular-nums text-ms-navy">{value}</span>
+                    <span className="shrink-0 text-2xl font-bold tabular-nums text-ms-navy">
+                      {value}
+                    </span>
                   </div>
-                  <MsProgress value={value} size="md" />
-                  <p className="text-xs leading-relaxed text-ms-ink3">{trait.description}</p>
+                  <div className="mt-4">
+                    <MsProgress value={value} size="md" />
+                  </div>
                 </div>
               );
             })}
@@ -199,14 +197,72 @@ export default function InsightsScreen() {
         </MsCard>
       )}
 
+      {moodPattern.length > 0 && (
+        <MsCard elevated>
+          <MsCardHeader
+            title="Mood mix"
+            meta="From your logged check-ins"
+            icon={<Sparkles size={16} />}
+          />
+          <div className="space-y-4 p-6">
+            {moodPattern.slice(0, 6).map((row) => (
+              <div key={row.label} className="rounded-xl border border-ms-line bg-ms-tint/40 px-5 py-4">
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <span className="font-semibold capitalize text-ms-ink">
+                    {formatMoodLabel(row.label)}
+                  </span>
+                  <MsPill tone="neutral">{row.count} check-ins</MsPill>
+                </div>
+                <MsProgress value={(row.count / maxMood) * 100} size="md" />
+              </div>
+            ))}
+          </div>
+        </MsCard>
+      )}
+
+      {mbti?.type && source === "ai" && (
+        <MsCard elevated>
+          <div className="flex items-start justify-between gap-3 border-b border-ms-line bg-ms-tint/40 px-6 py-5">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ms-ink3">
+                MBTI estimate
+              </p>
+              <p className="mt-1 text-4xl font-bold tracking-tight text-ms-ink">{mbti.type}</p>
+            </div>
+            <MsPill tone="brand">{mbti.confidence}% confidence</MsPill>
+          </div>
+          {axes && (
+            <div className="space-y-5 p-6">
+              {[
+                { left: "I", right: "E", value: axes.IE },
+                { left: "N", right: "S", value: axes.NS },
+                { left: "T", right: "F", value: axes.TF },
+                { left: "J", right: "P", value: axes.JP },
+              ].map((row) => (
+                <div
+                  key={row.left}
+                  className="rounded-xl border border-ms-line bg-ms-tint/40 px-5 py-4"
+                >
+                  <div className="mb-3 flex items-center justify-between text-xs font-semibold text-ms-ink3">
+                    <span>{row.left}</span>
+                    <span>{row.right}</span>
+                  </div>
+                  <MsProgress value={row.value} size="md" />
+                </div>
+              ))}
+            </div>
+          )}
+        </MsCard>
+      )}
+
       {insightCards.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           {insightCards.map((insight, idx) => (
             <MsCard key={`${insight.head}-${idx}`} interactive>
-              <div className="border-b border-ms-line bg-ms-tint/30 px-4 py-3">
+              <div className="border-b border-ms-line bg-ms-tint/30 px-5 py-4">
                 <h3 className="text-sm font-semibold text-ms-ink">{insight.head}</h3>
               </div>
-              <div className="p-4">
+              <div className="p-5">
                 <p className="text-sm leading-relaxed text-ms-ink2">{insight.body}</p>
               </div>
             </MsCard>
