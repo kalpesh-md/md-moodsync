@@ -47,7 +47,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
   };
 
   return (
-    <div className="flex w-full items-center gap-2 sm:gap-3">
+    <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <a
           href={`${moodscaleUrl}/dashboard`}
@@ -74,7 +74,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex w-full shrink-0 flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end">
         <div className="flex items-center gap-1 rounded-2xl border border-ms-line bg-ms-tint/60 p-1">
           <button
             type="button"

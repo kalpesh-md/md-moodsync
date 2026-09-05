@@ -229,7 +229,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           meta="Your day mapped by mood periods"
           icon={<Activity size={16} />}
         />
-        <div className="bg-ms-tint/20 p-5">
+        <div className="bg-ms-tint/20 p-4 sm:p-5">
           <MoodClock />
         </div>
       </MsCard>

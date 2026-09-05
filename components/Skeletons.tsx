@@ -139,26 +139,34 @@ export function FriendsPageSkeleton() {
 
 export function InsightsPageSkeleton() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeaderSkeleton />
-      <MsCard>
-        <div className="space-y-3 p-5">
-          <Bone className="h-8 w-24" />
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Bone key={i} className="h-2 w-full rounded-full" />
-          ))}
-        </div>
-      </MsCard>
-      <MsCard>
-        <div className="space-y-5 p-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="space-y-2">
-              <Bone className="h-4 w-40" />
-              <Bone className="h-2 w-full rounded-full" />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MsCard>
+          <div className="space-y-3 p-4">
+            <Bone className="h-6 w-32" />
+            <div className="flex justify-between gap-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Bone key={i} className="h-14 w-14 rounded-full" />
+              ))}
             </div>
-          ))}
-        </div>
-      </MsCard>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Bone key={i} className="h-10 w-full rounded-lg" />
+            ))}
+          </div>
+        </MsCard>
+        <MsCard>
+          <div className="space-y-3 p-4">
+            <Bone className="h-6 w-24" />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Bone className="h-4 w-32" />
+                <Bone className="h-2 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </MsCard>
+      </div>
     </div>
   );
 }

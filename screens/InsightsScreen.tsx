@@ -12,59 +12,62 @@ import { getCheckinMoods } from "@/lib/checkinMoods";
 import { formatMoodLabel } from "@/lib/utils";
 
 const OCEAN_TRAITS = [
-  {
-    key: "O" as const,
-    name: "Openness",
-    description: "Curiosity, creativity, open to new experiences",
-  },
-  {
-    key: "C" as const,
-    name: "Conscientiousness",
-    description: "Organization, dependability, discipline",
-  },
-  {
-    key: "E" as const,
-    name: "Extraversion",
-    description: "Sociability, energy, assertiveness",
-  },
-  {
-    key: "A" as const,
-    name: "Agreeableness",
-    description: "Compassion, cooperation, trust",
-  },
-  {
-    key: "N" as const,
-    name: "Neuroticism",
-    description: "Emotional sensitivity, anxiety, mood",
-  },
-];
+  { key: "O" as const, name: "Openness", short: "Open" },
+  { key: "C" as const, name: "Conscientiousness", short: "Discipline" },
+  { key: "E" as const, name: "Extraversion", short: "Social" },
+  { key: "A" as const, name: "Agreeableness", short: "Warmth" },
+  { key: "N" as const, name: "Neuroticism", short: "Sensitivity" },
+] as const;
 
-function TraitGauge({ value, label }: { value: number; label: string }) {
-  const clamped = Math.max(0, Math.min(100, value));
-  const dash = 2 * Math.PI * 36;
+function MiniGauge({ value, label }: { value: number; label: string }) {
+  const v = Math.max(0, Math.min(100, value));
+  const dash = 2 * Math.PI * 28;
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="relative h-20 w-20">
-        <svg viewBox="0 0 88 88" className="h-20 w-20 -rotate-90">
-          <circle cx="44" cy="44" r="36" fill="none" className="stroke-ms-soft" strokeWidth="7" />
+    <div className="flex flex-col items-center">
+      <div className="relative h-14 w-14 sm:h-16 sm:w-16">
+        <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+          <circle cx="32" cy="32" r="28" fill="none" className="stroke-ms-soft" strokeWidth="5" />
           <circle
-            cx="44"
-            cy="44"
-            r="36"
+            cx="32"
+            cy="32"
+            r="28"
             fill="none"
             className="stroke-ms-navy"
-            strokeWidth="7"
+            strokeWidth="5"
             strokeLinecap="round"
             strokeDasharray={dash}
-            strokeDashoffset={dash * (1 - clamped / 100)}
+            strokeDashoffset={dash * (1 - v / 100)}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-bold leading-none text-ms-ink">{clamped}</span>
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-ms-ink3">
-            {label}
-          </span>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-sm font-bold text-ms-ink">{v}</span>
         </div>
+      </div>
+      <span className="mt-1 text-[10px] font-semibold text-ms-ink3">{label}</span>
+    </div>
+  );
+}
+
+function TraitRow({
+  letter,
+  name,
+  value,
+}: {
+  letter: string;
+  name: string;
+  value: number;
+}) {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ms-soft text-xs font-bold text-ms-navy">
+        {letter}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-medium text-ms-ink">{name}</span>
+          <span className="shrink-0 text-sm font-bold tabular-nums text-ms-navy">{value}</span>
+        </div>
+        <MsProgress value={value} className="mt-1.5" />
       </div>
     </div>
   );
@@ -100,6 +103,11 @@ export default function InsightsScreen() {
       : localMoodPattern(checkins);
   const maxMood = Math.max(1, ...moodPattern.map((m) => m.count));
   const insightCards = personality?.insights?.length ? personality.insights : [];
+  const topTrait = ocean
+    ? OCEAN_TRAITS.reduce((best, t) =>
+        (ocean[t.key] ?? 0) > (ocean[best.key] ?? 0) ? t : best,
+      )
+    : null;
 
   const qualityLabel =
     source === "ai"
@@ -112,12 +120,13 @@ export default function InsightsScreen() {
 
   if (checkinCount === 0 && source !== "ai") {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <PageHeader
           eyebrow="Insights"
           title="Personality insights"
           subtitle={qualityLabel}
           icon={<Brain className="h-5 w-5" />}
+          compact
         />
         <EmptyState
           icon={<Sparkles className="h-[17px] w-[17px]" />}
@@ -129,125 +138,115 @@ export default function InsightsScreen() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Insights"
         title="Personality insights"
         subtitle={qualityLabel}
         icon={<Brain className="h-5 w-5" />}
+        compact
+        actions={
+          <div className="flex flex-wrap gap-1.5">
+            <MsPill tone="brand">{checkinCount} check-ins</MsPill>
+            {topTrait ? (
+              <MsPill tone="neutral">Strongest · {topTrait.short}</MsPill>
+            ) : null}
+            {moodPattern[0] ? (
+              <MsPill tone="neutral">Top mood · {formatMoodLabel(moodPattern[0].label)}</MsPill>
+            ) : null}
+          </div>
+        }
       />
 
       {source !== "ai" && (
-        <div className="rounded-2xl border border-ms-line bg-ms-tint px-5 py-4 text-sm leading-relaxed text-ms-ink2">
+        <p className="rounded-xl border border-ms-line bg-ms-tint px-4 py-3 text-xs leading-relaxed text-ms-ink2 sm:text-sm">
           {source === "insufficient"
-            ? "We show a light trait sketch from your moods. A fuller personality read — including MBTI — needs about five check-ins."
-            : "This is a mood-based sketch, not a clinical profile. We skip MBTI rather than invent a type."}
-        </div>
+            ? "Light trait sketch from your moods. A fuller read needs about five check-ins."
+            : "Mood-based sketch — not a clinical profile."}
+        </p>
       )}
 
-      {ocean && (
-        <MsCard elevated>
-          <MsCardHeader
-            title="Big Five traits"
-            meta={
-              source === "ai"
-                ? "Inferred from listening, fitness, and moods"
-                : "Estimated from the moods you log"
-            }
-            icon={<Brain size={16} />}
-          />
-          <div className="grid grid-cols-2 gap-3 border-b border-ms-line bg-ms-tint/30 p-6 sm:grid-cols-5">
-            {OCEAN_TRAITS.map((trait) => (
-              <TraitGauge
-                key={trait.key}
-                value={Math.max(0, Math.min(100, ocean[trait.key] ?? 0))}
-                label={trait.key}
-              />
-            ))}
-          </div>
-          <div className="space-y-4 p-6">
-            {OCEAN_TRAITS.map((trait) => {
-              const value = Math.max(0, Math.min(100, ocean[trait.key] ?? 0));
-              return (
-                <div
+      <div className="grid gap-4 lg:grid-cols-2">
+        {ocean && (
+          <MsCard elevated className="overflow-hidden">
+            <MsCardHeader
+              title="Big Five"
+              meta={source === "ai" ? "AI + signals" : "From check-ins"}
+              icon={<Brain size={16} />}
+              compact
+            />
+            <div className="flex justify-between gap-1 overflow-x-auto border-b border-ms-line bg-ms-tint/40 px-4 py-3 ms-scroll-x sm:px-5">
+              {OCEAN_TRAITS.map((trait) => (
+                <MiniGauge
                   key={trait.key}
-                  className="rounded-xl border border-ms-line bg-ms-tint/40 px-5 py-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <MsPill tone="brand">{trait.key}</MsPill>
-                        <span className="text-sm font-semibold text-ms-ink">{trait.name}</span>
-                      </div>
-                      <p className="mt-2 text-xs leading-relaxed text-ms-ink2">
-                        {trait.description}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-2xl font-bold tabular-nums text-ms-navy">
-                      {value}
-                    </span>
-                  </div>
-                  <div className="mt-4">
-                    <MsProgress value={value} size="md" />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </MsCard>
-      )}
+                  value={Math.max(0, Math.min(100, ocean[trait.key] ?? 0))}
+                  label={trait.key}
+                />
+              ))}
+            </div>
+            <div className="divide-y divide-ms-line px-4 py-1 sm:px-5">
+              {OCEAN_TRAITS.map((trait) => (
+                <TraitRow
+                  key={trait.key}
+                  letter={trait.key}
+                  name={trait.name}
+                  value={Math.max(0, Math.min(100, ocean[trait.key] ?? 0))}
+                />
+              ))}
+            </div>
+          </MsCard>
+        )}
 
-      {moodPattern.length > 0 && (
-        <MsCard elevated>
-          <MsCardHeader
-            title="Mood mix"
-            meta="From your logged check-ins"
-            icon={<Sparkles size={16} />}
-          />
-          <div className="space-y-4 p-6">
-            {moodPattern.slice(0, 6).map((row) => (
-              <div key={row.label} className="rounded-xl border border-ms-line bg-ms-tint/40 px-5 py-4">
-                <div className="mb-3 flex items-center justify-between text-sm">
-                  <span className="font-semibold capitalize text-ms-ink">
-                    {formatMoodLabel(row.label)}
-                  </span>
-                  <MsPill tone="neutral">{row.count} check-ins</MsPill>
+        {moodPattern.length > 0 && (
+          <MsCard elevated className="overflow-hidden">
+            <MsCardHeader
+              title="Mood mix"
+              meta={`${moodPattern.reduce((n, m) => n + m.count, 0)} logged`}
+              icon={<Sparkles size={16} />}
+              compact
+            />
+            <div className="space-y-3 px-4 py-4 sm:px-5">
+              {moodPattern.slice(0, 5).map((row) => (
+                <div key={row.label}>
+                  <div className="mb-1.5 flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate font-medium capitalize text-ms-ink">
+                      {formatMoodLabel(row.label)}
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-ms-ink3">{row.count}×</span>
+                  </div>
+                  <MsProgress value={(row.count / maxMood) * 100} />
                 </div>
-                <MsProgress value={(row.count / maxMood) * 100} size="md" />
-              </div>
-            ))}
-          </div>
-        </MsCard>
-      )}
+              ))}
+            </div>
+          </MsCard>
+        )}
+      </div>
 
       {mbti?.type && source === "ai" && (
         <MsCard elevated>
-          <div className="flex items-start justify-between gap-3 border-b border-ms-line bg-ms-tint/40 px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ms-line bg-ms-tint/40 px-4 py-4 sm:px-5">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ms-ink3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-ms-ink3">
                 MBTI estimate
               </p>
-              <p className="mt-1 text-4xl font-bold tracking-tight text-ms-ink">{mbti.type}</p>
+              <p className="text-3xl font-bold tracking-tight text-ms-ink">{mbti.type}</p>
             </div>
             <MsPill tone="brand">{mbti.confidence}% confidence</MsPill>
           </div>
           {axes && (
-            <div className="space-y-5 p-6">
+            <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
               {[
                 { left: "I", right: "E", value: axes.IE },
                 { left: "N", right: "S", value: axes.NS },
                 { left: "T", right: "F", value: axes.TF },
                 { left: "J", right: "P", value: axes.JP },
               ].map((row) => (
-                <div
-                  key={row.left}
-                  className="rounded-xl border border-ms-line bg-ms-tint/40 px-5 py-4"
-                >
-                  <div className="mb-3 flex items-center justify-between text-xs font-semibold text-ms-ink3">
+                <div key={row.left} className="rounded-lg border border-ms-line bg-ms-tint/30 px-3 py-2.5">
+                  <div className="mb-1.5 flex justify-between text-[10px] font-semibold text-ms-ink3">
                     <span>{row.left}</span>
                     <span>{row.right}</span>
                   </div>
-                  <MsProgress value={row.value} size="md" />
+                  <MsProgress value={row.value} />
                 </div>
               ))}
             </div>
@@ -256,22 +255,20 @@ export default function InsightsScreen() {
       )}
 
       {insightCards.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {insightCards.map((insight, idx) => (
             <MsCard key={`${insight.head}-${idx}`} interactive>
-              <div className="border-b border-ms-line bg-ms-tint/30 px-5 py-4">
+              <div className="border-b border-ms-line bg-ms-soft/50 px-4 py-3">
                 <h3 className="text-sm font-semibold text-ms-ink">{insight.head}</h3>
               </div>
-              <div className="p-5">
-                <p className="text-sm leading-relaxed text-ms-ink2">{insight.body}</p>
-              </div>
+              <p className="p-4 text-sm leading-relaxed text-ms-ink2">{insight.body}</p>
             </MsCard>
           ))}
         </div>
       )}
 
-      <p className="px-1 text-xs leading-relaxed text-ms-ink3">
-        Insights are estimates from MoodSync data, not a clinical assessment.
+      <p className="text-[11px] text-ms-ink3">
+        Estimates from MoodSync data — not a clinical assessment.
       </p>
     </div>
   );

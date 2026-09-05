@@ -123,6 +123,15 @@
     @apply relative pl-4 text-ms-ink2 before:absolute before:left-0 before:top-[0.55em] before:h-1 before:w-1 before:rounded-full before:bg-ms-navy/40;
     list-style: none;
   }
+
+  .ms-scroll-x {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .ms-scroll-x::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer components {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { cn } from "@/lib/utils";
 
 type PeriodId = "morning" | "work" | "evening" | "night";
 
@@ -10,18 +11,17 @@ interface Period {
   emoji: string;
   start: number;
   end: number;
-  stroke: string;
+  range: string;
 }
 
 const PERIODS: Period[] = [
-  { id: "morning", label: "Morning", emoji: "🌅", start: 5, end: 8, stroke: "#2D5A8B" },
-  { id: "work", label: "Focus", emoji: "💪", start: 9, end: 17, stroke: "#1E3A5F" },
-  { id: "evening", label: "Wind down", emoji: "🌙", start: 18, end: 21, stroke: "#378ADD" },
-  { id: "night", label: "Rest", emoji: "😴", start: 22, end: 4, stroke: "#64748B" },
+  { id: "morning", label: "Morning", emoji: "🌅", start: 5, end: 8, range: "5:00–8:00" },
+  { id: "work", label: "Focus", emoji: "💪", start: 9, end: 17, range: "9:00–17:00" },
+  { id: "evening", label: "Wind down", emoji: "🌙", start: 18, end: 21, range: "18:00–21:00" },
+  { id: "night", label: "Rest", emoji: "😴", start: 22, end: 4, range: "22:00–4:00" },
 ];
 
-const R = 72;
-const CIRC = 2 * Math.PI * R;
+const R = 68;
 
 function hourToAngle(hour: number): number {
   return (hour / 24) * 360 - 90;
@@ -34,11 +34,11 @@ function getCurrentPeriod(hour: number): Period {
   return PERIODS[3];
 }
 
-function arcPath(startHour: number, endHour: number): string {
+function activeArc(startHour: number, endHour: number): string {
   const span =
     endHour >= startHour ? endHour - startHour + 1 : 24 - startHour + endHour + 1;
   const startAngle = hourToAngle(startHour);
-  const endAngle = hourToAngle(startHour + span);
+  const endAngle = hourToAngle((startHour + span) % 24);
   const startRad = (startAngle * Math.PI) / 180;
   const endRad = (endAngle * Math.PI) / 180;
   const x1 = 100 + R * Math.cos(startRad);
@@ -57,107 +57,97 @@ export default function MoodClock({
   currentHour = new Date().getHours(),
 }: MoodClockProps) {
   const period = useMemo(() => getCurrentPeriod(currentHour), [currentHour]);
-  const progress = ((currentHour + 1) / 24) * 100;
   const handAngle = (currentHour / 24) * 360;
+  const minutes = new Date().getMinutes();
+  const timeLabel = `${String(currentHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 
   return (
-    <div className="mood-clock-modern">
-      <div className="clock-container rounded-full bg-ms-tint/60 p-2 ring-1 ring-ms-line">
-        <svg className="clock-svg-modern" viewBox="0 0 200 200">
-          <circle cx="100" cy="100" r={R + 10} fill="#F8FAFC" />
-          <circle cx="100" cy="100" r={R} fill="none" stroke="#E9EEF5" strokeWidth="10" />
-
-          {PERIODS.map((p) => (
+    <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
+      <div className="mx-auto w-full max-w-[200px] shrink-0 sm:max-w-[220px] md:mx-0">
+        <div className="relative aspect-square rounded-full bg-ms-tint/70 p-1.5 ring-1 ring-ms-line">
+          <svg viewBox="0 0 200 200" className="h-full w-full">
+            <circle cx="100" cy="100" r={R + 8} fill="#F8FAFC" />
+            <circle cx="100" cy="100" r={R} fill="none" stroke="#E9EEF5" strokeWidth="8" />
             <path
-              key={p.id}
-              d={arcPath(p.start, p.end)}
+              d={activeArc(period.start, period.end)}
               fill="none"
-              stroke={p.id === period.id ? p.stroke : "#E9EEF5"}
-              strokeWidth={p.id === period.id ? 10 : 6}
+              stroke="#1E3A5F"
+              strokeWidth="8"
               strokeLinecap="round"
-              opacity={p.id === period.id ? 1 : 0.55}
             />
-          ))}
-
-          <circle
-            cx="100"
-            cy="100"
-            r={R}
-            fill="none"
-            stroke="#1E3A5F"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeDasharray={CIRC}
-            strokeDashoffset={CIRC * (1 - progress / 100)}
-            transform="rotate(-90 100 100)"
-            opacity={0.35}
-          />
-
-          {[0, 6, 12, 18].map((hour) => {
-            const angle = hourToAngle(hour);
-            const rad = (angle * Math.PI) / 180;
-            const x = 100 + (R + 16) * Math.cos(rad);
-            const y = 100 + (R + 16) * Math.sin(rad);
-            return (
-              <text
-                key={hour}
-                x={x}
-                y={y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill="#94A3B8"
-                fontSize="10"
-                fontWeight="600"
-              >
-                {hour === 0 ? "12a" : hour === 12 ? "12p" : hour < 12 ? `${hour}a` : `${hour - 12}p`}
-              </text>
-            );
-          })}
-
-          <line
-            x1="100"
-            y1="100"
-            x2="100"
-            y2="36"
-            stroke="#1E3A5F"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            transform={`rotate(${handAngle} 100 100)`}
-            className="clock-hand"
-          />
-          <circle cx="100" cy="100" r="5" fill="#1E3A5F" />
-          <circle cx="100" cy="100" r="2.5" fill="#fff" />
-        </svg>
-
-        <div className="clock-center-mood">
-          <span className="clock-emoji">{period.emoji}</span>
-          <span className="clock-label">{period.label}</span>
-          <span className="clock-time">
-            {String(currentHour).padStart(2, "0")}:00
-          </span>
+            {[0, 6, 12, 18].map((hour) => {
+              const angle = hourToAngle(hour);
+              const rad = (angle * Math.PI) / 180;
+              const x = 100 + (R + 14) * Math.cos(rad);
+              const y = 100 + (R + 14) * Math.sin(rad);
+              return (
+                <text
+                  key={hour}
+                  x={x}
+                  y={y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#94A3B8"
+                  fontSize="9"
+                  fontWeight="600"
+                >
+                  {hour === 0 ? "12a" : hour === 12 ? "12p" : hour < 12 ? `${hour}a` : `${hour - 12}p`}
+                </text>
+              );
+            })}
+            <line
+              x1="100"
+              y1="100"
+              x2="100"
+              y2="40"
+              stroke="#1E3A5F"
+              strokeWidth="2"
+              strokeLinecap="round"
+              transform={`rotate(${handAngle} 100 100)`}
+            />
+            <circle cx="100" cy="100" r="4" fill="#1E3A5F" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+            <span className="text-xl leading-none">{period.emoji}</span>
+            <span className="mt-1 text-xs font-semibold capitalize text-ms-navy">{period.label}</span>
+            <span className="mt-0.5 text-[11px] text-ms-ink3">{timeLabel}</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid w-full max-w-sm grid-cols-2 gap-2 sm:grid-cols-4">
-        {PERIODS.map((p) => (
-          <div
-            key={p.id}
-            className={`rounded-xl border px-3 py-2 text-center transition-colors ${
-              p.id === period.id
-                ? "border-ms-navy/20 bg-ms-soft"
-                : "border-ms-line bg-ms-card"
-            }`}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-ms-ink3">
-              {p.label}
-            </p>
-            <p className="mt-0.5 text-xs font-medium text-ms-ink">
-              {p.start <= p.end
-                ? `${p.start}:00–${p.end}:00`
-                : `${p.start}:00–${p.end}:00`}
-            </p>
-          </div>
-        ))}
+      <div className="min-w-0 flex-1">
+        <p className="mb-2 hidden text-[11px] font-semibold uppercase tracking-wider text-ms-ink3 md:block">
+          Day phases
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-1 md:gap-1.5">
+          {PERIODS.map((p) => {
+            const active = p.id === period.id;
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors",
+                  active
+                    ? "border-ms-navy/25 bg-ms-soft"
+                    : "border-ms-line bg-ms-card",
+                )}
+              >
+                <span className="text-base leading-none">{p.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      "truncate text-[11px] font-semibold uppercase tracking-wide",
+                      active ? "text-ms-navy" : "text-ms-ink3",
+                    )}
+                  >
+                    {p.label}
+                  </p>
+                  <p className="truncate text-xs text-ms-ink2">{p.range}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
