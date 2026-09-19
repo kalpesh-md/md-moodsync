@@ -15,6 +15,7 @@ import { QueryProvider } from "@/components/query-provider";
 import { createCheckin } from "@/lib/api/checkins";
 import type { Checkin } from "@/lib/api/checkins";
 import { BrandLoader } from "@/components/Loaders";
+import type { IntegrationStatus } from "@/lib/api/integrations";
 import {
   useCheckins,
   useInvalidateCheckins,
@@ -153,9 +154,16 @@ function MoodSyncShell() {
     }
     if (connected === "spotify") {
       shownConnectNotice.current = true;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.recs });
+      queryClient.setQueryData<IntegrationStatus>(queryKeys.integrations, (current) => ({
+        spotify: { connected: true },
+        googleFit: current?.googleFit ?? { connected: false },
+      }));
+      void Promise.all([
+        queryClient.refetchQueries({ queryKey: queryKeys.me }),
+        queryClient.refetchQueries({ queryKey: queryKeys.integrations }),
+        queryClient.refetchQueries({ queryKey: queryKeys.moodSync }),
+        queryClient.refetchQueries({ queryKey: queryKeys.recs }),
+      ]);
       notice.success(
         "Spotify connected",
         "Your listening will now feed into your mood score.",
@@ -164,8 +172,15 @@ function MoodSyncShell() {
     }
     if (connected === "googlefit") {
       shownConnectNotice.current = true;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+      queryClient.setQueryData<IntegrationStatus>(queryKeys.integrations, (current) => ({
+        spotify: current?.spotify ?? { connected: false },
+        googleFit: { connected: true },
+      }));
+      void Promise.all([
+        queryClient.refetchQueries({ queryKey: queryKeys.me }),
+        queryClient.refetchQueries({ queryKey: queryKeys.integrations }),
+        queryClient.refetchQueries({ queryKey: queryKeys.moodSync }),
+      ]);
       notice.success(
         "Google Fit connected",
         "Sleep and steps will now sync into your snapshot.",

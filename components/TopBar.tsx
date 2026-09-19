@@ -41,11 +41,12 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
   const [spotifyBusy, setSpotifyBusy] = useState(false);
   const queryClient = useQueryClient();
   const notice = useNotice();
-  const { data: user } = useMe();
-  const { data: integrations } = useIntegrationStatus(!!user);
-  const { data: syncData } = useMoodSync(!!user);
+  const { data: user, isPending: userLoading } = useMe();
+  const { data: integrations } = useIntegrationStatus();
+  const { data: syncData } = useMoodSync();
   const spotifyNeedsReconnect = Boolean(syncData?.integrations?.spotifyNeedsReconnect);
-  const spotifyLinked = integrations?.spotify.connected ?? false;
+  const spotifyLinked =
+    integrations?.spotify.connected ?? syncData?.integrations?.spotify ?? false;
   const spotifyConnected = spotifyLinked && !spotifyNeedsReconnect;
   const fitConnected = integrations?.googleFit.connected ?? false;
   const moodscaleUrl = useMoodScaleUrl();
@@ -118,9 +119,9 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
         </span>
         {copyableUsername ? (
           <UsernameBadge username={copyableUsername} className="ml-0 sm:ml-1" />
-        ) : (
+        ) : userLoading ? (
           <span className="hidden h-8 w-24 shrink-0 animate-pulse rounded-full bg-ms-soft sm:block" />
-        )}
+        ) : null}
       </div>
 
       <div className="flex w-full shrink-0 flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end">

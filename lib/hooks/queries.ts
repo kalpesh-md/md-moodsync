@@ -36,7 +36,8 @@ export function useMe(enabled = true) {
     },
     enabled,
     staleTime: 5 * 60 * 1000,
-    ...sharedQueryOptions,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -67,8 +68,9 @@ export function useIntegrationStatus(enabled = true) {
     queryKey: queryKeys.integrations,
     queryFn: getIntegrationStatus,
     enabled,
-    staleTime: 60 * 1000,
-    ...sharedQueryOptions,
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -130,6 +132,20 @@ export function usePrefetchAppData(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return;
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.me,
+      queryFn: async () => {
+        const res = await getMe();
+        if (!res.user) throw new Error("User not found");
+        return res.user;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.integrations,
+      queryFn: getIntegrationStatus,
+      staleTime: 30 * 1000,
+    });
     void queryClient.prefetchQuery({
       queryKey: queryKeys.forecast,
       queryFn: getForecast,
