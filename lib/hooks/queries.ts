@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCheckins, getLatestCheckin } from "@/lib/api/checkins";
 import { getMe } from "@/lib/api/user";
@@ -85,12 +85,28 @@ export function useMoodSync(enabled = true) {
     queryKey: queryKeys.moodSync,
     queryFn: syncMood,
     enabled,
-    refetchInterval: 30 * 1000,
-    staleTime: 15 * 1000,
+    refetchInterval: enabled ? 60 * 1000 : false,
+    staleTime: 30 * 1000,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
   });
+}
+
+/** Delay mood sync so lightweight routes (me, friends) load first. */
+export function useDeferredMoodSync(enabled = true, delayMs = 4000) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setReady(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [enabled, delayMs]);
+
+  return useMoodSync(enabled && ready);
 }
 
 export function useRecs(enabled = true) {
@@ -163,35 +179,10 @@ export function usePrefetchAppData(enabled = true) {
     const afterOAuth = consumePostOAuthReturn();
 
     async function bootstrap() {
+      if (afterOAuth || cancelled) return;
+
       try {
-        await queryClient.fetchQuery({
-          queryKey: queryKeys.me,
-          queryFn: async () => {
-            const res = await getMe();
-            if (!res.user) throw new Error("User not found");
-            cacheUserSession(res.user);
-            return res.user;
-          },
-          staleTime: 5 * 60 * 1000,
-        });
-        if (cancelled) return;
-
-        await queryClient.fetchQuery({
-          queryKey: queryKeys.integrations,
-          queryFn: getIntegrationStatus,
-          staleTime: 30 * 1000,
-        });
-        if (cancelled) return;
-
-        void queryClient.fetchQuery({
-          queryKey: queryKeys.moodSync,
-          queryFn: syncMood,
-          staleTime: 15 * 1000,
-        });
-
-        if (afterOAuth || cancelled) return;
-
-        await new Promise((resolve) => window.setTimeout(resolve, 4000));
+        await new Promise((resolve) => window.setTimeout(resolve, 6000));
         if (cancelled) return;
 
         await queryClient.prefetchQuery({
@@ -214,7 +205,7 @@ export function usePrefetchAppData(enabled = true) {
           staleTime: 60 * 1000,
         });
       } catch {
-        /* individual screens refetch on demand */
+        /* screens refetch on demand */
       }
     }
 

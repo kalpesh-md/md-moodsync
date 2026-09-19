@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { fetchWithAuth } from "./http";
 
 export interface MoodSyncData {
   error?: string;
@@ -26,12 +27,7 @@ export interface MoodSyncData {
 }
 
 export async function syncMood(): Promise<MoodSyncData> {
-  const res = await fetch(`${API_URL}/mood/sync`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-  });
+  const res = await fetchWithAuth(`${API_URL}/mood/sync`, { method: "POST" }, 45_000);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to sync mood");
   return data;

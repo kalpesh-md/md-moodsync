@@ -27,7 +27,7 @@ import { PageHeader, SectionHeading } from "@/components/ui/ms/PageHeader";
 import { ScoreRing } from "@/components/ui/ms/ScoreRing";
 import { WeekStreak } from "@/components/ui/ms/WeekStreak";
 import { formatMoodLabel } from "@/lib/utils";
-import { queryKeys, useMoodSync } from "@/lib/hooks/queries";
+import { queryKeys, useDeferredMoodSync } from "@/lib/hooks/queries";
 
 interface TodayScreenProps {
   checkins: boolean[];
@@ -37,7 +37,7 @@ interface TodayScreenProps {
 export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   const notice = useNotice();
   const queryClient = useQueryClient();
-  const { data: syncData, isPending, isFetching, isError } = useMoodSync();
+  const { data: syncData, isPending, isFetching, isError } = useDeferredMoodSync();
   const moodScore = syncData?.moodScore ?? null;
   const spotifyConnected = syncData?.integrations?.spotify ?? false;
   const spotifyNeedsReconnect = Boolean(syncData?.integrations?.spotifyNeedsReconnect);

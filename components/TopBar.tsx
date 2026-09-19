@@ -25,9 +25,9 @@ import { useMoodScaleUrl } from "@/lib/useMoodScaleUrl";
 import { getCopyableUsername } from "@/lib/utils";
 import {
   queryKeys,
+  useDeferredMoodSync,
   useIntegrationStatus,
   useMe,
-  useMoodSync,
 } from "@/lib/hooks/queries";
 import UsernameBadge from "@/components/UsernameBadge";
 
@@ -43,7 +43,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
   const notice = useNotice();
   const { data: user, isPending: userLoading } = useMe();
   const { data: integrations } = useIntegrationStatus();
-  const { data: syncData } = useMoodSync();
+  const { data: syncData } = useDeferredMoodSync();
   const spotifyNeedsReconnect = Boolean(syncData?.integrations?.spotifyNeedsReconnect);
   const spotifyLinked =
     integrations?.spotify.connected ?? syncData?.integrations?.spotify ?? false;
