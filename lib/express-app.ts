@@ -312,7 +312,7 @@ app.post("/api/auth/sso", async (req, res) => {
 // 4. SPOTIFY INTEGRATION ROUTES
 // ============================================
 
-app.get("/api/spotify/auth-url", authRequired, (req, res) => {
+app.get("/api/spotify/auth-url", authRequired, async (req, res) => {
   const scopes = [
     "user-read-recently-played",
     "user-top-read",
@@ -321,13 +321,42 @@ app.get("/api/spotify/auth-url", authRequired, (req, res) => {
   ].join(" ");
 
   const redirectUri = getSpotifyRedirectUri(req);
-  const url =
-    `https://accounts.spotify.com/authorize?` +
-    `client_id=${process.env.SPOTIFY_CLIENT_ID}` +
-    `&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=${encodeURIComponent(scopes)}&state=${req.user.userId}`;
+  const db = getSupabaseAdmin();
+  const { data: profile } = await db
+    .from("moodsync_profiles")
+    .select("spotify_refresh_token")
+    .eq("user_id", req.user.userId)
+    .maybeSingle();
 
+  const params = new URLSearchParams({
+    client_id: process.env.SPOTIFY_CLIENT_ID,
+    response_type: "code",
+    redirect_uri: redirectUri,
+    scope: scopes,
+    state: req.user.userId,
+  });
+  if (!profile?.spotify_refresh_token || req.query.switch === "1") {
+    params.set("show_dialog", "true");
+  }
+
+  const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
   res.json({ url, redirect_uri: redirectUri });
+});
+
+app.post("/api/spotify/disconnect", authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  const db = getSupabaseAdmin();
+
+  await db
+    .from("moodsync_profiles")
+    .update({
+      spotify_access_token: null,
+      spotify_refresh_token: null,
+      spotify_token_expires: null,
+    })
+    .eq("user_id", userId);
+
+  res.json({ ok: true });
 });
 
 app.get("/api/spotify/callback", async (req, res) => {
@@ -335,6 +364,10 @@ app.get("/api/spotify/callback", async (req, res) => {
   const db = getSupabaseAdmin();
   const redirectUri = getSpotifyRedirectUri(req);
   const clientOrigin = getPublicOrigin(req);
+
+  if (!code || !userId) {
+    return res.redirect(`${clientOrigin}/?error=spotify`);
+  }
 
   const response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
@@ -355,16 +388,23 @@ app.get("/api/spotify/callback", async (req, res) => {
 
   const tokens = await response.json();
 
-  await db
-    .from("moodsync_profiles")
-    .update({
-      spotify_access_token: tokens.access_token,
-      spotify_refresh_token: tokens.refresh_token,
-      spotify_token_expires: new Date(
-        Date.now() + tokens.expires_in * 1000,
-      ).toISOString(),
-    })
-    .eq("user_id", userId);
+  if (!tokens.access_token) {
+    console.error("Spotify token exchange failed:", tokens);
+    return res.redirect(`${clientOrigin}/?error=spotify`);
+  }
+
+  const spotifyUpdate = {
+    spotify_access_token: tokens.access_token,
+    spotify_token_expires: new Date(
+      Date.now() + (Number(tokens.expires_in) || 3600) * 1000,
+    ).toISOString(),
+  };
+  // Spotify omits refresh_token on reconnect — never overwrite a good one with undefined.
+  if (tokens.refresh_token) {
+    spotifyUpdate.spotify_refresh_token = tokens.refresh_token;
+  }
+
+  await db.from("moodsync_profiles").update(spotifyUpdate).eq("user_id", userId);
 
   res.redirect(`${clientOrigin}/?connected=spotify`);
 });
@@ -374,13 +414,23 @@ app.get("/api/integrations/status", authRequired, async (req, res) => {
   const db = getSupabaseAdmin();
   const { data: user } = await db
     .from("moodsync_profiles")
-    .select("spotify_access_token, google_access_token")
+    .select(
+      "spotify_access_token, spotify_refresh_token, google_access_token, google_refresh_token",
+    )
     .eq("user_id", userId)
     .maybeSingle();
 
   res.json({
-    spotify: { connected: Boolean(user?.spotify_access_token) },
-    googleFit: { connected: Boolean(user?.google_access_token) },
+    spotify: {
+      connected: Boolean(
+        user?.spotify_access_token || user?.spotify_refresh_token,
+      ),
+    },
+    googleFit: {
+      connected: Boolean(
+        user?.google_access_token || user?.google_refresh_token,
+      ),
+    },
   });
 });
 
@@ -486,45 +536,19 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
     return res.status(404).json({ error: "Profile not found" });
   }
 
-  if (
-    (!user.spotify_token_expires ||
-      new Date() > new Date(user.spotify_token_expires)) &&
-    user.spotify_refresh_token
-  ) {
+  let spotifyTrack = null;
+  let spotifyNeedsReconnect = false;
+  if (user.spotify_access_token || user.spotify_refresh_token) {
     try {
-      const newAccessToken = await refreshSpotifyToken(userId);
-      if (newAccessToken) {
-        user.spotify_access_token = newAccessToken;
+      const playback = await getSpotifyPlaybackForUser(userId, user);
+      spotifyTrack = playback.track;
+      spotifyNeedsReconnect = Boolean(playback.needsReconnect);
+      if (playback.token) {
+        user.spotify_access_token = playback.token;
       }
     } catch (err) {
-      console.log("Token refresh failed:", err.message);
+      console.log("Spotify playback fetch failed:", err.message);
     }
-  }
-
-  let nowPlaying = null;
-
-  try {
-    const response = await fetch(
-      "https://api.spotify.com/v1/me/player/currently-playing",
-      { headers: { Authorization: `Bearer ${user.spotify_access_token}` } },
-    );
-
-    if (response.status === 200) {
-      nowPlaying = await response.json();
-    } else if (response.status === 204) {
-      const recentRes = await fetch(
-        "https://api.spotify.com/v1/me/player/recently-played?limit=1",
-        { headers: { Authorization: `Bearer ${user.spotify_access_token}` } },
-      );
-      if (recentRes.ok) {
-        const recentData = await recentRes.json();
-        if (recentData.items && recentData.items[0]) {
-          nowPlaying = { item: recentData.items[0].track, isRecent: true };
-        }
-      }
-    }
-  } catch (err) {
-    // Silent fail
   }
 
   const now = Date.now();
@@ -552,22 +576,31 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
 
   const moodScore = computeMoodScore({
     moodLabel: recentCheckin ? getCheckinMoods(recentCheckin) || null : null,
-    trackPopularity: nowPlaying?.item?.popularity ?? null,
+    trackPopularity: spotifyTrack?.popularity ?? null,
     steps: fitData.steps,
   });
 
   const { data: lastSnapshots } = await db
     .from("mood_snapshots")
-    .select("id, track_id, track_name, created_at")
+    .select("id, track_id, track_name, artist_name, album_art, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1);
 
   const lastSnapshot = lastSnapshots?.[0];
-  const trackId = nowPlaying?.item?.id || null;
-  const trackName = nowPlaying?.item?.name || null;
-  const artistName = nowPlaying?.item?.artists?.[0]?.name || null;
-  const albumArt = nowPlaying?.item?.album?.images?.[0]?.url || null;
+  let trackId = spotifyTrack?.id || null;
+  let trackName = spotifyTrack?.name || null;
+  let artistName = spotifyTrack?.artist || null;
+  let albumArt = spotifyTrack?.albumArt || null;
+  let isRecent = Boolean(spotifyTrack?.isRecent);
+
+  if (!trackName && lastSnapshot?.track_name) {
+    trackId = lastSnapshot.track_id || null;
+    trackName = lastSnapshot.track_name;
+    artistName = lastSnapshot.artist_name || null;
+    albumArt = lastSnapshot.album_art || null;
+    isRecent = true;
+  }
 
   const sameTrack = lastSnapshot?.track_id === trackId;
   const secondsSinceLast = lastSnapshot
@@ -602,13 +635,15 @@ app.post("/api/mood/sync", authRequired, async (req, res) => {
   res.json({
     moodScore,
     integrations: {
-      spotify: Boolean(user.spotify_access_token),
+      spotify: Boolean(user.spotify_access_token || user.spotify_refresh_token),
       googleFit: Boolean(user.google_access_token),
+      spotifyNeedsReconnect,
     },
     track: {
       name: trackName,
       artist: artistName,
-      isRecent: Boolean(nowPlaying?.isRecent),
+      albumArt,
+      isRecent,
     },
     fitData,
   });
@@ -989,7 +1024,7 @@ app.get("/api/recs", authRequired, async (req, res) => {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (!user?.spotify_access_token) {
+  if (!user?.spotify_access_token && !user?.spotify_refresh_token) {
     return res.json({
       recommendations: [],
       status: "spotify_not_connected",
@@ -998,26 +1033,36 @@ app.get("/api/recs", authRequired, async (req, res) => {
   }
 
   let accessToken = user.spotify_access_token;
-
-  if (
-    (!user.spotify_token_expires ||
-      new Date() > new Date(user.spotify_token_expires)) &&
-    user.spotify_refresh_token
-  ) {
-    try {
-      const refreshed = await refreshSpotifyToken(userId);
-      if (refreshed) accessToken = refreshed;
-    } catch (err) {
-      console.log("Recs token refresh failed:", err.message);
+  try {
+    const ensured = await ensureSpotifyAccessToken(userId, user);
+    accessToken = ensured.token;
+    if (ensured.needsReconnect && !accessToken) {
+      return res.json({
+        recommendations: [],
+        status: "token_expired",
+        message: "Your Spotify session expired. Reconnect to refresh recommendations.",
+      });
     }
+  } catch (err) {
+    console.log("Recs token refresh failed:", err.message);
   }
 
   try {
     let topTracks = { items: [] };
-    const topRes = await fetch(
+    let topRes = await fetch(
       "https://api.spotify.com/v1/me/top/tracks?limit=20&time_range=short_term",
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
+    if (topRes.status === 401) {
+      const refreshed = await refreshSpotifyToken(userId);
+      if (refreshed) {
+        accessToken = refreshed;
+        topRes = await fetch(
+          "https://api.spotify.com/v1/me/top/tracks?limit=20&time_range=short_term",
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+      }
+    }
     if (topRes.status === 401) {
       return res.json({
         recommendations: [],
@@ -1607,6 +1652,118 @@ function computeMoodScore({ moodLabel, trackPopularity, steps }) {
   return Math.round(weighted / totalWeight);
 }
 
+function isSpotifyTokenExpired(user) {
+  if (!user?.spotify_access_token) return true;
+  if (!user?.spotify_token_expires) return true;
+  const exp = new Date(user.spotify_token_expires).getTime();
+  if (Number.isNaN(exp)) return true;
+  return Date.now() > exp - 60 * 1000;
+}
+
+function normalizeSpotifyItem(item, isRecent = false) {
+  if (!item) return null;
+  if (item.type === "episode") {
+    return {
+      id: item.id || null,
+      name: item.name || null,
+      artist: item.show?.name || "Podcast",
+      albumArt: item.images?.[0]?.url || item.show?.images?.[0]?.url || null,
+      popularity: null,
+      isRecent,
+    };
+  }
+  return {
+    id: item.id || null,
+    name: item.name || null,
+    artist: item.artists?.[0]?.name || null,
+    albumArt: item.album?.images?.[0]?.url || null,
+    popularity: typeof item.popularity === "number" ? item.popularity : null,
+    isRecent,
+  };
+}
+
+async function spotifyFetch(url, accessToken) {
+  return fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+async function ensureSpotifyAccessToken(userId, user) {
+  if (!user?.spotify_access_token && !user?.spotify_refresh_token) {
+    return { token: null, needsReconnect: false };
+  }
+  if (!isSpotifyTokenExpired(user) && user.spotify_access_token) {
+    return { token: user.spotify_access_token, needsReconnect: false };
+  }
+  if (!user.spotify_refresh_token) {
+    return { token: user.spotify_access_token || null, needsReconnect: true };
+  }
+  try {
+    const refreshed = await refreshSpotifyToken(userId);
+    if (refreshed) return { token: refreshed, needsReconnect: false };
+  } catch (err) {
+    console.log("Spotify refresh failed:", err.message);
+  }
+  return {
+    token: user.spotify_access_token || null,
+    needsReconnect: true,
+  };
+}
+
+async function fetchSpotifyPlayback(accessToken) {
+  const playingRes = await spotifyFetch(
+    "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",
+    accessToken,
+  );
+  if (playingRes.status === 401) return { unauthorized: true, track: null };
+  if (playingRes.status === 200) {
+    const data = await playingRes.json();
+    const track = normalizeSpotifyItem(data?.item, false);
+    if (track?.name) return { unauthorized: false, track };
+  }
+
+  const recentRes = await spotifyFetch(
+    "https://api.spotify.com/v1/me/player/recently-played?limit=1",
+    accessToken,
+  );
+  if (recentRes.status === 401) return { unauthorized: true, track: null };
+  if (recentRes.ok) {
+    const recentData = await recentRes.json();
+    const track = normalizeSpotifyItem(recentData.items?.[0]?.track, true);
+    if (track?.name) return { unauthorized: false, track };
+  }
+  return { unauthorized: false, track: null };
+}
+
+async function getSpotifyPlaybackForUser(userId, user) {
+  let { token, needsReconnect } = await ensureSpotifyAccessToken(userId, user);
+  if (!token) {
+    return { track: null, token: null, needsReconnect };
+  }
+
+  let playback = await fetchSpotifyPlayback(token);
+  if (playback.unauthorized) {
+    try {
+      const refreshed = await refreshSpotifyToken(userId);
+      if (refreshed) {
+        token = refreshed;
+        needsReconnect = false;
+        playback = await fetchSpotifyPlayback(token);
+      } else {
+        needsReconnect = true;
+      }
+    } catch (err) {
+      console.log("Spotify retry refresh failed:", err.message);
+      needsReconnect = true;
+    }
+  }
+  return {
+    track: playback.unauthorized ? null : playback.track,
+    token,
+    needsReconnect,
+  };
+}
+
 async function refreshSpotifyToken(userId) {
   const db = getSupabaseAdmin();
   const { data: user } = await db
@@ -1643,15 +1800,17 @@ async function refreshSpotifyToken(userId) {
     return null;
   }
 
-  await db
-    .from("moodsync_profiles")
-    .update({
-      spotify_access_token: data.access_token,
-      spotify_token_expires: new Date(
-        Date.now() + data.expires_in * 1000,
-      ).toISOString(),
-    })
-    .eq("user_id", userId);
+  const update = {
+    spotify_access_token: data.access_token,
+    spotify_token_expires: new Date(
+      Date.now() + (Number(data.expires_in) || 3600) * 1000,
+    ).toISOString(),
+  };
+  if (data.refresh_token) {
+    update.spotify_refresh_token = data.refresh_token;
+  }
+
+  await db.from("moodsync_profiles").update(update).eq("user_id", userId);
 
   return data.access_token;
 }

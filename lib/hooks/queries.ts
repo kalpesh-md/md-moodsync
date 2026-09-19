@@ -80,7 +80,8 @@ export function useMoodSync(enabled = true) {
     refetchInterval: 30 * 1000,
     staleTime: 15 * 1000,
     placeholderData: (prev) => prev,
-    ...sharedQueryOptions,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 }
 

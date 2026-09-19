@@ -142,6 +142,15 @@ function MoodSyncShell() {
     if (shownConnectNotice.current) return;
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
+    if (params.get("error") === "spotify") {
+      shownConnectNotice.current = true;
+      notice.error(
+        "Spotify connect failed",
+        "Could not finish Spotify login. Please try connecting again.",
+      );
+      window.history.replaceState({}, "", "/");
+      return;
+    }
     if (connected === "spotify") {
       shownConnectNotice.current = true;
       void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
@@ -163,7 +172,7 @@ function MoodSyncShell() {
       );
       window.history.replaceState({}, "", "/");
     }
-  }, [notice]);
+  }, [notice, queryClient]);
 
   useEffect(() => {
     if (!isLoggedIn || !latestCheckinReady || checkInPrompted) return;

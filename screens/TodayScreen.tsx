@@ -40,6 +40,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   const { data: syncData, isPending, isFetching, isError } = useMoodSync();
   const moodScore = syncData?.moodScore ?? null;
   const spotifyConnected = syncData?.integrations?.spotify ?? false;
+  const spotifyNeedsReconnect = Boolean(syncData?.integrations?.spotifyNeedsReconnect);
   const fitConnected = syncData?.integrations?.googleFit ?? false;
   const syncing = isFetching;
   const showSkeleton = isPending && !syncData;
@@ -88,12 +89,14 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           ? "Fetching…"
           : "—",
       detail: syncData?.track?.artist
-        ? `${syncData.track.artist}${syncData.track.isRecent ? " · recent" : ""}`
-        : spotifyConnected
-          ? "Nothing playing right now"
-          : "Connect Spotify to sync",
-      action: !spotifyConnected ? connectSpotify : undefined,
-      actionLabel: "Connect Spotify",
+        ? `${syncData.track.artist}${syncData.track.isRecent ? " · last played" : ""}`
+        : spotifyNeedsReconnect
+          ? "Spotify session expired — reconnect to load tracks"
+          : spotifyConnected
+            ? "Nothing playing right now — play a song, then tap Sync"
+            : "Connect Spotify to sync",
+      action: !spotifyConnected || spotifyNeedsReconnect ? connectSpotify : undefined,
+      actionLabel: spotifyNeedsReconnect ? "Reconnect Spotify" : "Connect Spotify",
     },
     {
       icon: Heart,

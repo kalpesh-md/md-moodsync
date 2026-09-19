@@ -6,10 +6,12 @@ export interface MoodSyncData {
   integrations?: {
     spotify: boolean;
     googleFit: boolean;
+    spotifyNeedsReconnect?: boolean;
   };
   track?: {
-    name: string;
-    artist: string;
+    name: string | null;
+    artist: string | null;
+    albumArt?: string | null;
     isRecent?: boolean;
   };
   fitData?: {
@@ -30,6 +32,7 @@ export async function syncMood(): Promise<MoodSyncData> {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
-
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to sync mood");
+  return data;
 }

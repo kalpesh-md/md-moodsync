@@ -5,18 +5,30 @@ import Image from "next/image";
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
   Moon,
   Music2,
   Activity,
   Sun,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { connectGoogleFit } from "@/lib/api/googlefit";
-import { connectSpotify } from "@/lib/api/spotify";
+import {
+  connectSpotify,
+  disconnectSpotify,
+  switchSpotifyAccount,
+} from "@/lib/api/spotify";
 import { MsButton } from "@/components/ui/ms/MsButton";
 import { MsPill } from "@/components/ui/ms/MsPill";
+import { useNotice } from "@/components/notice-provider";
 import { useMoodScaleUrl } from "@/lib/useMoodScaleUrl";
 import { getCopyableUsername } from "@/lib/utils";
-import { useIntegrationStatus, useMe } from "@/lib/hooks/queries";
+import {
+  queryKeys,
+  useIntegrationStatus,
+  useMe,
+  useMoodSync,
+} from "@/lib/hooks/queries";
 import UsernameBadge from "@/components/UsernameBadge";
 
 interface TopBarProps {
@@ -25,12 +37,49 @@ interface TopBarProps {
 
 export default function TopBar({ onCheckIn }: TopBarProps) {
   const [isDark, setIsDark] = useState(false);
+  const [spotifyMenuOpen, setSpotifyMenuOpen] = useState(false);
+  const [spotifyBusy, setSpotifyBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const notice = useNotice();
   const { data: user } = useMe();
   const { data: integrations } = useIntegrationStatus(!!user);
-  const spotifyConnected = integrations?.spotify.connected ?? false;
+  const { data: syncData } = useMoodSync(!!user);
+  const spotifyNeedsReconnect = Boolean(syncData?.integrations?.spotifyNeedsReconnect);
+  const spotifyLinked = integrations?.spotify.connected ?? false;
+  const spotifyConnected = spotifyLinked && !spotifyNeedsReconnect;
   const fitConnected = integrations?.googleFit.connected ?? false;
   const moodscaleUrl = useMoodScaleUrl();
   const copyableUsername = getCopyableUsername(user?.username, user?.email);
+
+  const refreshSpotifyState = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.recs });
+  };
+
+  const handleSpotifyDisconnect = async () => {
+    setSpotifyBusy(true);
+    try {
+      await disconnectSpotify();
+      refreshSpotifyState();
+      setSpotifyMenuOpen(false);
+      notice.success("Spotify disconnected", "You can connect a different account anytime.");
+    } catch {
+      notice.error("Couldn't disconnect Spotify", "Please try again.");
+    } finally {
+      setSpotifyBusy(false);
+    }
+  };
+
+  const handleSpotifySwitch = async () => {
+    setSpotifyBusy(true);
+    try {
+      await switchSpotifyAccount();
+    } catch {
+      notice.error("Couldn't switch Spotify account", "Please try again.");
+      setSpotifyBusy(false);
+    }
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -84,14 +133,85 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
           >
             {isDark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          {spotifyConnected ? (
-            <MsPill tone="success" icon={<Check className="h-3 w-3" />}>
+          {spotifyLinked ? (
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={spotifyMenuOpen}
+                aria-haspopup="menu"
+                disabled={spotifyBusy}
+                onClick={() => setSpotifyMenuOpen((open) => !open)}
+                className="rounded-full transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                <MsPill
+                  tone={spotifyConnected ? "success" : "warning"}
+                  icon={<Check className="h-3 w-3" />}
+                  className="cursor-pointer pr-1.5"
+                >
+                  <span className="hidden sm:inline">
+                    {spotifyNeedsReconnect ? "Spotify" : "Spotify"}
+                  </span>
+                  <span className="sm:hidden">Sp</span>
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </MsPill>
+              </button>
+              {spotifyMenuOpen ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close Spotify menu"
+                    className="fixed inset-0 z-40"
+                    onClick={() => setSpotifyMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[168px] overflow-hidden rounded-xl border border-ms-line bg-ms-card py-1 shadow-lift"
+                  >
+                    {spotifyNeedsReconnect ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={spotifyBusy}
+                        onClick={() => {
+                          setSpotifyMenuOpen(false);
+                          void connectSpotify();
+                        }}
+                        className="flex w-full px-3 py-2 text-left text-xs font-medium text-ms-ink hover:bg-ms-tint"
+                      >
+                        Reconnect
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={spotifyBusy}
+                      onClick={() => void handleSpotifySwitch()}
+                      className="flex w-full px-3 py-2 text-left text-xs font-medium text-ms-ink hover:bg-ms-tint"
+                    >
+                      Switch account
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={spotifyBusy}
+                      onClick={() => void handleSpotifyDisconnect()}
+                      className="flex w-full px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : (
+            <MsButton
+              variant="ghost"
+              size="sm"
+              icon={<Music2 className="h-3.5 w-3.5" />}
+              onClick={() => void connectSpotify()}
+            >
               <span className="hidden sm:inline">Spotify</span>
               <span className="sm:hidden">Sp</span>
-            </MsPill>
-          ) : (
-            <MsButton variant="ghost" size="sm" icon={<Music2 className="h-3.5 w-3.5" />} onClick={connectSpotify}>
-              <span className="hidden sm:inline">Spotify</span>
             </MsButton>
           )}
           {fitConnected ? (
