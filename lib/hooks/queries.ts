@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCheckins, getLatestCheckin } from "@/lib/api/checkins";
 import { getMe } from "@/lib/api/user";
+import { cacheUserSession, readCachedUserSession } from "@/lib/userSession";
 import { getIntegrationStatus } from "@/lib/api/integrations";
 import { syncMood } from "@/lib/api/mood";
 import { getRecs } from "@/lib/api/recs";
@@ -32,9 +33,11 @@ export function useMe(enabled = true) {
     queryFn: async () => {
       const res = await getMe();
       if (!res.user) throw new Error("User not found");
+      cacheUserSession(res.user);
       return res.user;
     },
     enabled,
+    placeholderData: (prev) => prev ?? readCachedUserSession(),
     staleTime: 5 * 60 * 1000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
@@ -146,26 +149,29 @@ export function usePrefetchAppData(enabled = true) {
       queryFn: getIntegrationStatus,
       staleTime: 30 * 1000,
     });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.forecast,
-      queryFn: getForecast,
-      staleTime: 20 * 60 * 1000,
-    });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.recs,
-      queryFn: getRecs,
-      staleTime: 5 * 60 * 1000,
-    });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.moodSync,
-      queryFn: syncMood,
-      staleTime: 15 * 1000,
-    });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.personality,
-      queryFn: getPersonality,
-      staleTime: 10 * 60 * 1000,
-    });
+    const prefetchHeavy = () => {
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.moodSync,
+        queryFn: syncMood,
+        staleTime: 15 * 1000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.forecast,
+        queryFn: getForecast,
+        staleTime: 20 * 60 * 1000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.recs,
+        queryFn: getRecs,
+        staleTime: 5 * 60 * 1000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.personality,
+        queryFn: getPersonality,
+        staleTime: 10 * 60 * 1000,
+      });
+    };
+    window.setTimeout(prefetchHeavy, 300);
   }, [enabled, queryClient]);
 }
 

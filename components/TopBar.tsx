@@ -82,6 +82,19 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
     }
   };
 
+  const handleSpotifyConnect = async () => {
+    setSpotifyBusy(true);
+    try {
+      await connectSpotify();
+    } catch (err) {
+      notice.error(
+        "Couldn't connect Spotify",
+        err instanceof Error ? err.message : "Please try again in a moment.",
+      );
+      setSpotifyBusy(false);
+    }
+  };
+
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     const dark = savedTheme === "dark";
@@ -175,7 +188,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
                         disabled={spotifyBusy}
                         onClick={() => {
                           setSpotifyMenuOpen(false);
-                          void connectSpotify();
+                          void handleSpotifyConnect();
                         }}
                         className="flex w-full px-3 py-2 text-left text-xs font-medium text-ms-ink hover:bg-ms-tint"
                       >
@@ -209,7 +222,8 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
               variant="ghost"
               size="sm"
               icon={<Music2 className="h-3.5 w-3.5" />}
-              onClick={() => void connectSpotify()}
+              disabled={spotifyBusy}
+              onClick={() => void handleSpotifyConnect()}
             >
               <span className="hidden sm:inline">Spotify</span>
               <span className="sm:hidden">Sp</span>

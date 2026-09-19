@@ -224,6 +224,24 @@ async function authRequired(req, res, next) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  // Fast path: MoodSync session JWT from SSO (local verify, no network).
+  try {
+    const decoded = jwt.verify(token, jwtSecret());
+    const userId = decoded.userId || decoded.sub;
+    if (userId) {
+      req.user = {
+        userId: String(userId),
+        email: decoded.email ?? undefined,
+      };
+      return next();
+    }
+  } catch (err) {
+    if (err?.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token expired" });
+    }
+  }
+
+  // Fallback: Supabase access token (MoodScale direct auth).
   try {
     const supabaseUser = await getUserFromAccessToken(token);
     if (supabaseUser) {
@@ -233,20 +251,11 @@ async function authRequired(req, res, next) {
       };
       return next();
     }
-
-    const decoded = jwt.verify(token, jwtSecret());
-    const userId = decoded.userId || decoded.sub;
-    if (!userId) {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-    req.user = {
-      userId: String(userId),
-      email: decoded.email ?? undefined,
-    };
-    next();
-  } catch (err) {
-    res.status(401).json({ error: "Invalid token" });
+  } catch {
+    /* ignore */
   }
+
+  return res.status(401).json({ error: "Invalid token" });
 }
 
 // ============================================
@@ -313,34 +322,45 @@ app.post("/api/auth/sso", async (req, res) => {
 // ============================================
 
 app.get("/api/spotify/auth-url", authRequired, async (req, res) => {
-  const scopes = [
-    "user-read-recently-played",
-    "user-top-read",
-    "user-read-currently-playing",
-    "user-read-playback-state",
-  ].join(" ");
-
-  const redirectUri = getSpotifyRedirectUri(req);
-  const db = getSupabaseAdmin();
-  const { data: profile } = await db
-    .from("moodsync_profiles")
-    .select("spotify_refresh_token")
-    .eq("user_id", req.user.userId)
-    .maybeSingle();
-
-  const params = new URLSearchParams({
-    client_id: process.env.SPOTIFY_CLIENT_ID,
-    response_type: "code",
-    redirect_uri: redirectUri,
-    scope: scopes,
-    state: req.user.userId,
-  });
-  if (!profile?.spotify_refresh_token || req.query.switch === "1") {
-    params.set("show_dialog", "true");
+  if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
+    return res.status(503).json({
+      error: "Spotify is not configured on the server",
+    });
   }
 
-  const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
-  res.json({ url, redirect_uri: redirectUri });
+  try {
+    const scopes = [
+      "user-read-recently-played",
+      "user-top-read",
+      "user-read-currently-playing",
+      "user-read-playback-state",
+    ].join(" ");
+
+    const redirectUri = getSpotifyRedirectUri(req);
+    const db = getSupabaseAdmin();
+    const { data: profile } = await db
+      .from("moodsync_profiles")
+      .select("spotify_refresh_token")
+      .eq("user_id", req.user.userId)
+      .maybeSingle();
+
+    const params = new URLSearchParams({
+      client_id: process.env.SPOTIFY_CLIENT_ID,
+      response_type: "code",
+      redirect_uri: redirectUri,
+      scope: scopes,
+      state: req.user.userId,
+    });
+    if (!profile?.spotify_refresh_token || req.query.switch === "1") {
+      params.set("show_dialog", "true");
+    }
+
+    const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    res.json({ url, redirect_uri: redirectUri });
+  } catch (err) {
+    console.error("spotify/auth-url error:", err.message);
+    res.status(500).json({ error: "Could not start Spotify connect" });
+  }
 });
 
 app.post("/api/spotify/disconnect", authRequired, async (req, res) => {
