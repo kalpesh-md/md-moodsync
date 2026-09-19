@@ -7,6 +7,11 @@ import { getMe } from "@/lib/api/user";
 import { cacheUserSession, readCachedUserSession } from "@/lib/userSession";
 import { getIntegrationStatus } from "@/lib/api/integrations";
 import { syncMood } from "@/lib/api/mood";
+import {
+  getFriendRequests,
+  getFriends,
+  getPendingRequests,
+} from "@/lib/api/friends";
 import { getRecs } from "@/lib/api/recs";
 import { getForecast } from "@/lib/api/forecast";
 import { getPersonality } from "@/lib/api/insights";
@@ -20,6 +25,9 @@ export const queryKeys = {
   recs: ["recs"] as const,
   forecast: ["forecast"] as const,
   personality: ["insights", "personality"] as const,
+  friends: ["friends"] as const,
+  friendRequests: ["friends", "requests"] as const,
+  pendingFriendRequests: ["friends", "pending"] as const,
 };
 
 const sharedQueryOptions = {
@@ -130,12 +138,55 @@ export function useForecast(enabled = true) {
   });
 }
 
+export function useFriendsData(enabled = true) {
+  const friendsQuery = useQuery({
+    queryKey: queryKeys.friends,
+    queryFn: getFriends,
+    enabled,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
+    ...sharedQueryOptions,
+  });
+  const requestsQuery = useQuery({
+    queryKey: queryKeys.friendRequests,
+    queryFn: getFriendRequests,
+    enabled,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
+    ...sharedQueryOptions,
+  });
+  const pendingQuery = useQuery({
+    queryKey: queryKeys.pendingFriendRequests,
+    queryFn: getPendingRequests,
+    enabled,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
+    ...sharedQueryOptions,
+  });
+
+  return {
+    friends: friendsQuery.data ?? [],
+    requests: requestsQuery.data ?? [],
+    pending: pendingQuery.data ?? [],
+    isPending:
+      friendsQuery.isPending || requestsQuery.isPending || pendingQuery.isPending,
+    isFetching:
+      friendsQuery.isFetching || requestsQuery.isFetching || pendingQuery.isFetching,
+    refetch: () =>
+      Promise.all([
+        friendsQuery.refetch(),
+        requestsQuery.refetch(),
+        pendingQuery.refetch(),
+      ]),
+  };
+}
+
 export function usePrefetchAppData(enabled = true) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!enabled) return;
-    // Only warm data needed for Today + header — avoid flooding the server.
+
     void queryClient.prefetchQuery({
       queryKey: queryKeys.me,
       queryFn: async () => {
@@ -156,7 +207,98 @@ export function usePrefetchAppData(enabled = true) {
       queryFn: syncMood,
       staleTime: 15 * 1000,
     });
+
+    // Warm secondary tabs after Today loads — one at a time to avoid server pile-up.
+    const timer = window.setTimeout(async () => {
+      await queryClient.prefetchQuery({
+        queryKey: queryKeys.forecast,
+        queryFn: getForecast,
+        staleTime: 20 * 60 * 1000,
+      });
+      await queryClient.prefetchQuery({
+        queryKey: queryKeys.personality,
+        queryFn: getPersonality,
+        staleTime: 10 * 60 * 1000,
+      });
+      await Promise.all([
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.friends,
+          queryFn: getFriends,
+          staleTime: 60 * 1000,
+        }),
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.friendRequests,
+          queryFn: getFriendRequests,
+          staleTime: 60 * 1000,
+        }),
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.pendingFriendRequests,
+          queryFn: getPendingRequests,
+          staleTime: 60 * 1000,
+        }),
+      ]);
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
   }, [enabled, queryClient]);
+}
+
+export function useInvalidateFriends() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.friends });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.friendRequests });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.pendingFriendRequests });
+  };
+}
+
+export function prefetchScreenData(
+  queryClient: ReturnType<typeof useQueryClient>,
+  screen: "forecast" | "insights" | "friends" | "recs",
+) {
+  if (screen === "forecast") {
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.forecast,
+      queryFn: getForecast,
+      staleTime: 20 * 60 * 1000,
+    });
+    return;
+  }
+  if (screen === "insights") {
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.personality,
+      queryFn: getPersonality,
+      staleTime: 10 * 60 * 1000,
+    });
+    return;
+  }
+  if (screen === "friends") {
+    void Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.friends,
+        queryFn: getFriends,
+        staleTime: 60 * 1000,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.friendRequests,
+        queryFn: getFriendRequests,
+        staleTime: 60 * 1000,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.pendingFriendRequests,
+        queryFn: getPendingRequests,
+        staleTime: 60 * 1000,
+      }),
+    ]);
+    return;
+  }
+  if (screen === "recs") {
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.recs,
+      queryFn: getRecs,
+      staleTime: 5 * 60 * 1000,
+    });
+  }
 }
 
 export function useInvalidateCheckins() {

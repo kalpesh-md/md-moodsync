@@ -1381,22 +1381,24 @@ app.get("/api/friends", authRequired, async (req, res) => {
 
     if (profileErr) throw profileErr;
 
-    const result = [];
-    for (const u of profiles || []) {
-      const { data: lastCheckin } = await db
-        .from("mood_checkins")
-        .select("mood_label, note, mood_labels")
-        .eq("user_id", u.user_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: recentCheckins } = await db
+      .from("mood_checkins")
+      .select("user_id, mood_label, note, mood_labels, created_at")
+      .in("user_id", mutualIds)
+      .order("created_at", { ascending: false });
 
-      result.push({
-        id: u.user_id,
-        username: u.username,
-        last_mood: lastCheckin ? getCheckinMoods(lastCheckin) : null,
-      });
+    const latestMoodByUser = new Map();
+    for (const checkin of recentCheckins || []) {
+      if (!latestMoodByUser.has(checkin.user_id)) {
+        latestMoodByUser.set(checkin.user_id, getCheckinMoods(checkin));
+      }
     }
+
+    const result = (profiles || []).map((u) => ({
+      id: u.user_id,
+      username: u.username,
+      last_mood: latestMoodByUser.get(u.user_id) || null,
+    }));
 
     res.json(result);
   } catch (err) {

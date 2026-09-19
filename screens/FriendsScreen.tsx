@@ -5,15 +5,13 @@ import { getPrivacy, updatePrivacy } from "@/lib/api/privacy";
 import type { PrivacySettings } from "@/lib/api/privacy";
 import FriendMoodChart from "@/components/FriendMoodChart";
 import {
-  getFriends,
-  getFriendRequests,
-  getPendingRequests,
   acceptFriendRequest,
   sendFriendRequest,
   ignoreFriendRequest,
   searchUsers,
   getFriendMoodTrend,
 } from "@/lib/api/friends";
+import { useFriendsData, useInvalidateFriends } from "@/lib/hooks/queries";
 import type { FriendUser, MoodTrendPoint } from "@/lib/api/friends";
 import { MsButton } from "@/components/ui/ms/MsButton";
 import { MsCard, MsCardHeader } from "@/components/ui/ms/MsCard";
@@ -87,17 +85,21 @@ function Avatar({
 
 export default function FriendsScreen() {
   const notice = useNotice();
+  const invalidateFriends = useInvalidateFriends();
+  const {
+    friends: friendsData,
+    requests: requestsData,
+    pending: pendingRequests,
+    isPending,
+    refetch: refetchFriends,
+  } = useFriendsData();
   const [searchResults, setSearchResults] = useState<FriendUser[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<FriendUser[]>([]);
   const [trendData, setTrendData] = useState<MoodTrendPoint[]>([]);
   const [showTrend, setShowTrend] = useState(false);
-  const [requests, setRequests] = useState<RequestDisplay[]>([]);
-  const [friends, setFriends] = useState<FriendDisplay[]>([]);
   const [selectedFriend, setSelectedFriend] = useState<FriendDisplay | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [friendFilter, setFriendFilter] = useState("");
   const [searching, setSearching] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PrivacySettings>({
     mood: true,
@@ -107,44 +109,26 @@ export default function FriendsScreen() {
     fitness: false,
   });
 
+  const friends: FriendDisplay[] = friendsData.map((user) => ({
+    id: user.id,
+    name: formatUsername(user.username),
+    initials: user.username.slice(0, 2).toUpperCase(),
+    match: moodMatchPercent(user.id),
+    mood: formatMoodLabel(user.last_mood) || "No check-in",
+    mutual: true,
+  }));
+
+  const requests: RequestDisplay[] = requestsData.map((user) => ({
+    id: user.id,
+    name: formatUsername(user.username),
+    initials: user.username.slice(0, 2).toUpperCase(),
+  }));
+
+  const loading = isPending && friends.length === 0 && requests.length === 0;
+
   useEffect(() => {
-    loadFriends();
     loadPrivacy();
   }, []);
-
-  async function loadFriends() {
-    try {
-      const [friendsData, requestsData, pendingData] = await Promise.all([
-        getFriends(),
-        getFriendRequests(),
-        getPendingRequests(),
-      ]);
-
-      setPendingRequests(pendingData);
-
-      setFriends(
-        friendsData.map((user) => ({
-          id: user.id,
-          name: formatUsername(user.username),
-          initials: user.username.slice(0, 2).toUpperCase(),
-          match: moodMatchPercent(user.id),
-          mood: formatMoodLabel(user.last_mood) || "No check-in",
-          mutual: true,
-        })),
-      );
-      setRequests(
-        requestsData.map((user) => ({
-          id: user.id,
-          name: formatUsername(user.username),
-          initials: user.username.slice(0, 2).toUpperCase(),
-        })),
-      );
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function openMoodTrend(friend: FriendDisplay) {
     try {
@@ -170,8 +154,8 @@ export default function FriendsScreen() {
     setActionLoading(`accept-${req.id}`);
     try {
       await acceptFriendRequest(req.id);
-      setRequests((prev) => prev.filter((r) => r.id !== req.id));
-      await loadFriends();
+      invalidateFriends();
+      await refetchFriends();
       notice.success("Friend added", `You and ${req.name} are now connected.`);
     } catch (err) {
       console.error(err);
@@ -266,7 +250,8 @@ export default function FriendsScreen() {
                         );
                         setSearchQuery("");
                         setSearchResults([]);
-                        await loadFriends();
+                        invalidateFriends();
+                        await refetchFriends();
                       } catch {
                         notice.error(
                           "Unable to send request",
@@ -363,7 +348,8 @@ export default function FriendsScreen() {
                       setActionLoading(`ignore-${req.id}`);
                       try {
                         await ignoreFriendRequest(req.id);
-                        setRequests((r) => r.filter((x) => x.id !== req.id));
+                        invalidateFriends();
+                        await refetchFriends();
                       } catch (err) {
                         console.error(err);
                         notice.error("Couldn't ignore request", "Please try again.");

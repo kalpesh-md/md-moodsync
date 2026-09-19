@@ -21,6 +21,7 @@ import {
   useInvalidateCheckins,
   useLatestCheckin,
   usePrefetchAppData,
+  prefetchScreenData,
   queryKeys,
 } from "@/lib/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -97,6 +98,12 @@ function MoodSyncShell() {
   const { data: latestCheckin, isFetched: latestCheckinReady } = useLatestCheckin(isLoggedIn);
 
   usePrefetchAppData(isLoggedIn);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    if (activeScreen === "today") return;
+    prefetchScreenData(queryClient, activeScreen);
+  }, [activeScreen, isLoggedIn, queryClient]);
 
   useEffect(() => {
     setMountedScreens((prev) => {
