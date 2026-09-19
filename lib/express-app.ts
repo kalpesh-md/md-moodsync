@@ -45,11 +45,17 @@ app.get("/api/health", (req, res) => {
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+let genAI = null;
+let model = null;
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-});
+function getGeminiModel() {
+  if (!process.env.GEMINI_API_KEY) return null;
+  if (!genAI) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  }
+  return model;
+}
 
 const forecastCache = new Map();
 const insightsCache = new Map();
@@ -1607,9 +1613,11 @@ async function sendFriendRequestEmail(toEmail, toUsername, fromUsername) {
 }
 
 async function generateWithRetry(prompt, retries = 2, delayMs = 1000) {
+  const gemini = getGeminiModel();
+  if (!gemini) throw new Error("Gemini not configured");
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
+      const result = await gemini.generateContent(prompt);
       return await result.response;
     } catch (err) {
       const isLastAttempt = attempt === retries;

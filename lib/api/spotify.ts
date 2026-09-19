@@ -1,12 +1,16 @@
 import { API_URL } from "./config";
+import {
+  buildSpotifyAuthUrl,
+  canBuildSpotifyAuthUrlLocally,
+} from "@/lib/spotifyOAuth";
 
-const CONNECT_TIMEOUT_MS = 12_000;
+const CONNECT_TIMEOUT_MS = 15_000;
 
 function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${localStorage.getItem("token")}` };
 }
 
-export async function getSpotifyAuthUrl(options?: {
+async function getSpotifyAuthUrlFromServer(options?: {
   switchAccount?: boolean;
 }): Promise<{ url: string }> {
   const qs = options?.switchAccount ? "?switch=1" : "";
@@ -36,6 +40,15 @@ export async function getSpotifyAuthUrl(options?: {
   }
 }
 
+export async function getSpotifyAuthUrl(options?: {
+  switchAccount?: boolean;
+}): Promise<{ url: string }> {
+  if (canBuildSpotifyAuthUrlLocally()) {
+    return { url: buildSpotifyAuthUrl(options) };
+  }
+  return getSpotifyAuthUrlFromServer(options);
+}
+
 export async function connectSpotify(options?: {
   switchAccount?: boolean;
 }): Promise<void> {
@@ -44,14 +57,25 @@ export async function connectSpotify(options?: {
 }
 
 export async function disconnectSpotify(): Promise<void> {
-  const res = await fetch(`${API_URL}/spotify/disconnect`, {
-    method: "POST",
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error("Failed to disconnect Spotify");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_URL}/spotify/disconnect`, {
+      method: "POST",
+      headers: authHeaders(),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error("Failed to disconnect Spotify");
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export async function switchSpotifyAccount(): Promise<void> {
-  await disconnectSpotify();
+  try {
+    await disconnectSpotify();
+  } catch {
+    // Still open Spotify login even if token clear failed.
+  }
   await connectSpotify({ switchAccount: true });
 }
