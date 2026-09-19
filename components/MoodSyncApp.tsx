@@ -84,6 +84,9 @@ function MoodSyncShell() {
   const queryClient = useQueryClient();
   const invalidateCheckins = useInvalidateCheckins();
   const [activeScreen, setActiveScreen] = useState<ScreenId>("today");
+  const [mountedScreens, setMountedScreens] = useState<Set<ScreenId>>(
+    () => new Set(["today"]),
+  );
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkInPrompted, setCheckInPrompted] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -94,6 +97,15 @@ function MoodSyncShell() {
   const { data: latestCheckin, isFetched: latestCheckinReady } = useLatestCheckin(isLoggedIn);
 
   usePrefetchAppData(isLoggedIn);
+
+  useEffect(() => {
+    setMountedScreens((prev) => {
+      if (prev.has(activeScreen)) return prev;
+      const next = new Set(prev);
+      next.add(activeScreen);
+      return next;
+    });
+  }, [activeScreen]);
 
   const checkins = useMemo(
     () => mapCheckinsToWeek(checkinsList),
@@ -229,11 +241,13 @@ function MoodSyncShell() {
         </aside>
         <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <div className="pb-6">
-            {SCREEN_IDS.map((id) => (
-              <div key={id} className={activeScreen === id ? "block" : "hidden"}>
-                {screens[id]}
-              </div>
-            ))}
+            {SCREEN_IDS.map((id) =>
+              mountedScreens.has(id) ? (
+                <div key={id} className={activeScreen === id ? "block" : "hidden"}>
+                  {screens[id]}
+                </div>
+              ) : null,
+            )}
           </div>
         </main>
       </div>
