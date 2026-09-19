@@ -1,12 +1,15 @@
 import type { NextRequest } from "next/server";
-import app from "@/lib/express-app";
-import { forwardToExpress } from "@/lib/express-adapter";
+import { handleApiRequest } from "@/lib/server/router";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function handle(req: NextRequest) {
-  return forwardToExpress(app, req);
+async function handle(
+  req: NextRequest,
+  ctx: { params: Promise<{ path?: string[] }> },
+) {
+  const { path = [] } = await ctx.params;
+  return handleApiRequest(req, path);
 }
 
 export const GET = handle;

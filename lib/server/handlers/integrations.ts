@@ -1,21 +1,18 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getAuthUser, unauthorizedResponse } from "@/lib/server/auth";
+import { requireAuth, type RouteHandler } from "@/lib/server/http";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-export async function GET(request: Request) {
-  const user = await getAuthUser(request);
-  if (!user) return unauthorizedResponse();
+export const getIntegrationsStatus: RouteHandler = async (request) => {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
 
   try {
     const db = getSupabaseAdmin();
-    const { data: profile, error } = await db
+    const { data: user, error } = await db
       .from("moodsync_profiles")
       .select(
         "spotify_access_token, spotify_refresh_token, google_access_token, google_refresh_token",
       )
-      .eq("user_id", user.userId)
+      .eq("user_id", auth.user.userId)
       .maybeSingle();
 
     if (error) throw error;
@@ -23,20 +20,21 @@ export async function GET(request: Request) {
     return Response.json({
       spotify: {
         connected: Boolean(
-          profile?.spotify_access_token || profile?.spotify_refresh_token,
+          user?.spotify_access_token || user?.spotify_refresh_token,
         ),
       },
       googleFit: {
         connected: Boolean(
-          profile?.google_access_token || profile?.google_refresh_token,
+          user?.google_access_token || user?.google_refresh_token,
         ),
       },
     });
   } catch (err) {
-    console.error("integrations/status route error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("integrations/status error:", message);
     return Response.json({
       spotify: { connected: false },
       googleFit: { connected: false },
     });
   }
-}
+};

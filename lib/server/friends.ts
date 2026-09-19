@@ -111,3 +111,18 @@ export async function getFriendsSummaryForUser(userId: string) {
   ]);
   return { friends, requests, pending };
 }
+
+export async function getMutualFriendsForUser(userId: string) {
+  const db = getSupabaseAdmin();
+  return fetchMutualFriends(db, userId);
+}
+
+export async function getIncomingFriendRequests(userId: string) {
+  const db = getSupabaseAdmin();
+  return fetchIncomingFriendRequests(db, userId);
+}
+
+export async function getOutgoingPendingRequests(userId: string) {
+  const db = getSupabaseAdmin();
+  return fetchOutgoingPendingRequests(db, userId);
+}
