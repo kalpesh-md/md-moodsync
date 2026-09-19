@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { fetchWithAuth } from "./http";
 
 export interface User {
   username?: string;
@@ -12,13 +13,7 @@ export interface User {
 }
 
 export async function getMe(): Promise<{ user: User }> {
-  const token = localStorage.getItem("token");
-
-  const res = await fetch(`${API_URL}/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
+  const res = await fetchWithAuth(`${API_URL}/auth/me`);
+  if (!res.ok) throw new Error("Failed to load profile");
   return res.json();
 }

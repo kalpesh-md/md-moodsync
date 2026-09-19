@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import TodayScreen from "@/screens/TodayScreen";
 import ForecastScreen from "@/screens/ForecastScreen";
 import FriendsScreen from "@/screens/FriendsScreen";
@@ -16,6 +16,7 @@ import { createCheckin } from "@/lib/api/checkins";
 import type { Checkin } from "@/lib/api/checkins";
 import { BrandLoader } from "@/components/Loaders";
 import type { IntegrationStatus } from "@/lib/api/integrations";
+import { markPostOAuthReturn } from "@/lib/api/sessionFlags";
 import {
   useCheckins,
   useInvalidateCheckins,
@@ -97,6 +98,13 @@ function MoodSyncShell() {
   const { data: checkinsList = [] } = useCheckins(isLoggedIn);
   const { data: latestCheckin, isFetched: latestCheckinReady } = useLatestCheckin(isLoggedIn);
 
+  useLayoutEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connected")) {
+      markPostOAuthReturn();
+    }
+  }, []);
+
   usePrefetchAppData(isLoggedIn);
 
   useEffect(() => {
@@ -173,16 +181,14 @@ function MoodSyncShell() {
     }
     if (connected === "spotify") {
       shownConnectNotice.current = true;
+      markPostOAuthReturn();
       queryClient.setQueryData<IntegrationStatus>(queryKeys.integrations, (current) => ({
         spotify: { connected: true },
         googleFit: current?.googleFit ?? { connected: false },
       }));
-      void Promise.all([
-        queryClient.refetchQueries({ queryKey: queryKeys.me }),
-        queryClient.refetchQueries({ queryKey: queryKeys.integrations }),
-        queryClient.refetchQueries({ queryKey: queryKeys.moodSync }),
-        queryClient.refetchQueries({ queryKey: queryKeys.recs }),
-      ]);
+      window.setTimeout(() => {
+        void queryClient.refetchQueries({ queryKey: queryKeys.moodSync });
+      }, 1500);
       notice.success(
         "Spotify connected",
         "Your listening will now feed into your mood score.",
@@ -191,15 +197,14 @@ function MoodSyncShell() {
     }
     if (connected === "googlefit") {
       shownConnectNotice.current = true;
+      markPostOAuthReturn();
       queryClient.setQueryData<IntegrationStatus>(queryKeys.integrations, (current) => ({
         spotify: current?.spotify ?? { connected: false },
         googleFit: { connected: true },
       }));
-      void Promise.all([
-        queryClient.refetchQueries({ queryKey: queryKeys.me }),
-        queryClient.refetchQueries({ queryKey: queryKeys.integrations }),
-        queryClient.refetchQueries({ queryKey: queryKeys.moodSync }),
-      ]);
+      window.setTimeout(() => {
+        void queryClient.refetchQueries({ queryKey: queryKeys.moodSync });
+      }, 1500);
       notice.success(
         "Google Fit connected",
         "Sleep and steps will now sync into your snapshot.",

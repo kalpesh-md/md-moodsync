@@ -54,8 +54,9 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
 
   const refreshSpotifyState = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.recs });
+    window.setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+    }, 800);
   };
 
   const handleSpotifyDisconnect = async () => {

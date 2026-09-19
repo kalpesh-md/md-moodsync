@@ -91,6 +91,7 @@ export default function FriendsScreen() {
     requests: requestsData,
     pending: pendingRequests,
     isPending,
+    isError,
     refetch: refetchFriends,
   } = useFriendsData();
   const [searchResults, setSearchResults] = useState<FriendUser[]>([]);
@@ -188,6 +189,25 @@ export default function FriendsScreen() {
 
   if (loading) {
     return <FriendsPageSkeleton />;
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          eyebrow="Friends"
+          title="Your circle"
+          subtitle="Find people, manage requests, and share mood safely"
+          icon={<Users className="h-5 w-5" />}
+        />
+        <MsCard className="p-6 text-center">
+          <p className="text-sm text-ms-ink2">Couldn&apos;t load friends right now.</p>
+          <MsButton className="mt-4" size="sm" onClick={() => void refetchFriends()}>
+            Try again
+          </MsButton>
+        </MsCard>
+      </div>
+    );
   }
 
   return (

@@ -7,11 +7,8 @@ import { getMe } from "@/lib/api/user";
 import { cacheUserSession, readCachedUserSession } from "@/lib/userSession";
 import { getIntegrationStatus } from "@/lib/api/integrations";
 import { syncMood } from "@/lib/api/mood";
-import {
-  getFriendRequests,
-  getFriends,
-  getPendingRequests,
-} from "@/lib/api/friends";
+import { getFriendsSummary } from "@/lib/api/friends";
+import { consumePostOAuthReturn } from "@/lib/api/sessionFlags";
 import { getRecs } from "@/lib/api/recs";
 import { getForecast } from "@/lib/api/forecast";
 import { getPersonality } from "@/lib/api/insights";
@@ -25,9 +22,7 @@ export const queryKeys = {
   recs: ["recs"] as const,
   forecast: ["forecast"] as const,
   personality: ["insights", "personality"] as const,
-  friends: ["friends"] as const,
-  friendRequests: ["friends", "requests"] as const,
-  pendingFriendRequests: ["friends", "pending"] as const,
+  friendsSummary: ["friends", "summary"] as const,
 };
 
 const sharedQueryOptions = {
@@ -139,25 +134,9 @@ export function useForecast(enabled = true) {
 }
 
 export function useFriendsData(enabled = true) {
-  const friendsQuery = useQuery({
-    queryKey: queryKeys.friends,
-    queryFn: getFriends,
-    enabled,
-    staleTime: 60 * 1000,
-    placeholderData: (prev) => prev,
-    ...sharedQueryOptions,
-  });
-  const requestsQuery = useQuery({
-    queryKey: queryKeys.friendRequests,
-    queryFn: getFriendRequests,
-    enabled,
-    staleTime: 60 * 1000,
-    placeholderData: (prev) => prev,
-    ...sharedQueryOptions,
-  });
-  const pendingQuery = useQuery({
-    queryKey: queryKeys.pendingFriendRequests,
-    queryFn: getPendingRequests,
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.friendsSummary,
+    queryFn: getFriendsSummary,
     enabled,
     staleTime: 60 * 1000,
     placeholderData: (prev) => prev,
@@ -165,19 +144,13 @@ export function useFriendsData(enabled = true) {
   });
 
   return {
-    friends: friendsQuery.data ?? [],
-    requests: requestsQuery.data ?? [],
-    pending: pendingQuery.data ?? [],
-    isPending:
-      friendsQuery.isPending || requestsQuery.isPending || pendingQuery.isPending,
-    isFetching:
-      friendsQuery.isFetching || requestsQuery.isFetching || pendingQuery.isFetching,
-    refetch: () =>
-      Promise.all([
-        friendsQuery.refetch(),
-        requestsQuery.refetch(),
-        pendingQuery.refetch(),
-      ]),
+    friends: summaryQuery.data?.friends ?? [],
+    requests: summaryQuery.data?.requests ?? [],
+    pending: summaryQuery.data?.pending ?? [],
+    isPending: summaryQuery.isPending,
+    isFetching: summaryQuery.isFetching,
+    isError: summaryQuery.isError,
+    refetch: () => summaryQuery.refetch(),
   };
 }
 
@@ -186,69 +159,76 @@ export function usePrefetchAppData(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return;
+    let cancelled = false;
+    const afterOAuth = consumePostOAuthReturn();
 
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.me,
-      queryFn: async () => {
-        const res = await getMe();
-        if (!res.user) throw new Error("User not found");
-        cacheUserSession(res.user);
-        return res.user;
-      },
-      staleTime: 5 * 60 * 1000,
-    });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.integrations,
-      queryFn: getIntegrationStatus,
-      staleTime: 30 * 1000,
-    });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.moodSync,
-      queryFn: syncMood,
-      staleTime: 15 * 1000,
-    });
+    async function bootstrap() {
+      try {
+        await queryClient.fetchQuery({
+          queryKey: queryKeys.me,
+          queryFn: async () => {
+            const res = await getMe();
+            if (!res.user) throw new Error("User not found");
+            cacheUserSession(res.user);
+            return res.user;
+          },
+          staleTime: 5 * 60 * 1000,
+        });
+        if (cancelled) return;
 
-    // Warm secondary tabs after Today loads — one at a time to avoid server pile-up.
-    const timer = window.setTimeout(async () => {
-      await queryClient.prefetchQuery({
-        queryKey: queryKeys.forecast,
-        queryFn: getForecast,
-        staleTime: 20 * 60 * 1000,
-      });
-      await queryClient.prefetchQuery({
-        queryKey: queryKeys.personality,
-        queryFn: getPersonality,
-        staleTime: 10 * 60 * 1000,
-      });
-      await Promise.all([
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.friends,
-          queryFn: getFriends,
-          staleTime: 60 * 1000,
-        }),
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.friendRequests,
-          queryFn: getFriendRequests,
-          staleTime: 60 * 1000,
-        }),
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.pendingFriendRequests,
-          queryFn: getPendingRequests,
-          staleTime: 60 * 1000,
-        }),
-      ]);
-    }, 2500);
+        await queryClient.fetchQuery({
+          queryKey: queryKeys.integrations,
+          queryFn: getIntegrationStatus,
+          staleTime: 30 * 1000,
+        });
+        if (cancelled) return;
 
-    return () => window.clearTimeout(timer);
+        void queryClient.fetchQuery({
+          queryKey: queryKeys.moodSync,
+          queryFn: syncMood,
+          staleTime: 15 * 1000,
+        });
+
+        if (afterOAuth || cancelled) return;
+
+        await new Promise((resolve) => window.setTimeout(resolve, 4000));
+        if (cancelled) return;
+
+        await queryClient.prefetchQuery({
+          queryKey: queryKeys.forecast,
+          queryFn: getForecast,
+          staleTime: 20 * 60 * 1000,
+        });
+        if (cancelled) return;
+
+        await queryClient.prefetchQuery({
+          queryKey: queryKeys.personality,
+          queryFn: getPersonality,
+          staleTime: 10 * 60 * 1000,
+        });
+        if (cancelled) return;
+
+        await queryClient.prefetchQuery({
+          queryKey: queryKeys.friendsSummary,
+          queryFn: getFriendsSummary,
+          staleTime: 60 * 1000,
+        });
+      } catch {
+        /* individual screens refetch on demand */
+      }
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, [enabled, queryClient]);
 }
 
 export function useInvalidateFriends() {
   const queryClient = useQueryClient();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.friends });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.friendRequests });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.pendingFriendRequests });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.friendsSummary });
   };
 }
 
@@ -273,23 +253,11 @@ export function prefetchScreenData(
     return;
   }
   if (screen === "friends") {
-    void Promise.all([
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.friends,
-        queryFn: getFriends,
-        staleTime: 60 * 1000,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.friendRequests,
-        queryFn: getFriendRequests,
-        staleTime: 60 * 1000,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.pendingFriendRequests,
-        queryFn: getPendingRequests,
-        staleTime: 60 * 1000,
-      }),
-    ]);
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.friendsSummary,
+      queryFn: getFriendsSummary,
+      staleTime: 60 * 1000,
+    });
     return;
   }
   if (screen === "recs") {
