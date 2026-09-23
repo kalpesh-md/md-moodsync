@@ -12,7 +12,11 @@ import {
   Sun,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { connectGoogleFit } from "@/lib/api/googlefit";
+import {
+  connectGoogleFit,
+  disconnectGoogleFit,
+  switchGoogleFitAccount,
+} from "@/lib/api/googlefit";
 import {
   connectSpotify,
   disconnectSpotify,
@@ -38,7 +42,9 @@ interface TopBarProps {
 export default function TopBar({ onCheckIn }: TopBarProps) {
   const [isDark, setIsDark] = useState(false);
   const [spotifyMenuOpen, setSpotifyMenuOpen] = useState(false);
+  const [fitMenuOpen, setFitMenuOpen] = useState(false);
   const [spotifyBusy, setSpotifyBusy] = useState(false);
+  const [fitBusy, setFitBusy] = useState(false);
   const queryClient = useQueryClient();
   const notice = useNotice();
   const { data: user, isPending: userLoading } = useMe();
@@ -52,7 +58,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
   const moodscaleUrl = useMoodScaleUrl();
   const copyableUsername = getCopyableUsername(user?.username, user?.email);
 
-  const refreshSpotifyState = () => {
+  const refreshIntegrationState = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
     window.setTimeout(() => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
@@ -63,7 +69,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
     setSpotifyBusy(true);
     try {
       await disconnectSpotify();
-      refreshSpotifyState();
+      refreshIntegrationState();
       setSpotifyMenuOpen(false);
       notice.success("Spotify disconnected", "You can connect a different account anytime.");
     } catch {
@@ -93,6 +99,43 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
         err instanceof Error ? err.message : "Please try again in a moment.",
       );
       setSpotifyBusy(false);
+    }
+  };
+
+  const handleFitDisconnect = async () => {
+    setFitBusy(true);
+    try {
+      await disconnectGoogleFit();
+      refreshIntegrationState();
+      setFitMenuOpen(false);
+      notice.success("Google Fit disconnected", "You can connect a different account anytime.");
+    } catch {
+      notice.error("Couldn't disconnect Google Fit", "Please try again.");
+    } finally {
+      setFitBusy(false);
+    }
+  };
+
+  const handleFitSwitch = async () => {
+    setFitBusy(true);
+    try {
+      await switchGoogleFitAccount();
+    } catch {
+      notice.error("Couldn't switch Google Fit account", "Please try again.");
+      setFitBusy(false);
+    }
+  };
+
+  const handleFitConnect = async () => {
+    setFitBusy(true);
+    try {
+      await connectGoogleFit();
+    } catch (err) {
+      notice.error(
+        "Couldn't connect Google Fit",
+        err instanceof Error ? err.message : "Please try again in a moment.",
+      );
+      setFitBusy(false);
     }
   };
 
@@ -231,12 +274,67 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
             </MsButton>
           )}
           {fitConnected ? (
-            <MsPill tone="success" icon={<Check className="h-3 w-3" />}>
-              <span className="hidden sm:inline">Fit</span>
-              <span className="sm:hidden">Fit</span>
-            </MsPill>
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={fitMenuOpen}
+                aria-haspopup="menu"
+                disabled={fitBusy}
+                onClick={() => setFitMenuOpen((open) => !open)}
+                className="rounded-full transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                <MsPill
+                  tone="success"
+                  icon={<Check className="h-3 w-3" />}
+                  className="cursor-pointer pr-1.5"
+                >
+                  <span className="hidden sm:inline">Fit</span>
+                  <span className="sm:hidden">Fit</span>
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </MsPill>
+              </button>
+              {fitMenuOpen ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close Google Fit menu"
+                    className="fixed inset-0 z-40"
+                    onClick={() => setFitMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[168px] overflow-hidden rounded-xl border border-ms-line bg-ms-card py-1 shadow-lift"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={fitBusy}
+                      onClick={() => void handleFitSwitch()}
+                      className="flex w-full px-3 py-2 text-left text-xs font-medium text-ms-ink hover:bg-ms-tint"
+                    >
+                      Switch account
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={fitBusy}
+                      onClick={() => void handleFitDisconnect()}
+                      className="flex w-full px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
           ) : (
-            <MsButton variant="ghost" size="sm" icon={<Activity className="h-3.5 w-3.5" />} onClick={connectGoogleFit}>
+            <MsButton
+              variant="ghost"
+              size="sm"
+              icon={<Activity className="h-3.5 w-3.5" />}
+              disabled={fitBusy}
+              onClick={() => void handleFitConnect()}
+            >
               <span className="hidden sm:inline">Fit</span>
             </MsButton>
           )}

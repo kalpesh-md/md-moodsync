@@ -7,7 +7,11 @@ import {
   getCheckinsWeek,
   postCheckins,
 } from "@/lib/server/handlers/checkins";
-import { getFitAuthUrl, getFitCallback } from "@/lib/server/handlers/fit";
+import {
+  getFitAuthUrl,
+  getFitCallback,
+  postFitDisconnect,
+} from "@/lib/server/handlers/fit";
 import {
   deleteFriendsRequest,
   getFriendMoodTrend,
@@ -49,6 +53,7 @@ const routes: RouteDefinition[] = [
   { method: "GET", segments: ["spotify", "status"], handler: getSpotifyStatus },
   { method: "GET", segments: ["integrations", "status"], handler: getIntegrationsStatus },
   { method: "GET", segments: ["fit", "auth-url"], handler: getFitAuthUrl },
+  { method: "POST", segments: ["fit", "disconnect"], handler: postFitDisconnect },
   { method: "GET", segments: ["fit", "callback"], handler: getFitCallback },
   { method: "POST", segments: ["mood", "sync"], handler: postMoodSync },
   { method: "GET", segments: ["mood", "snapshots"], handler: getMoodSnapshots },

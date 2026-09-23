@@ -22,6 +22,23 @@ export const getFitAuthUrl: RouteHandler = async (request) => {
   return Response.json({ url, redirect_uri: redirectUri });
 };
 
+export const postFitDisconnect: RouteHandler = async (request) => {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
+  const db = getSupabaseAdmin();
+  await db
+    .from("moodsync_profiles")
+    .update({
+      google_access_token: null,
+      google_refresh_token: null,
+      google_token_expires: null,
+    })
+    .eq("user_id", auth.user.userId);
+
+  return Response.json({ ok: true });
+};
+
 export const getFitCallback: RouteHandler = async (request) => {
   const code = getQueryParam(request, "code");
   const userId = getQueryParam(request, "state");
