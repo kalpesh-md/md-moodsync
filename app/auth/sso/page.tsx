@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { exchangeSsoToken } from "@/lib/api/auth";
 import { BrandLoader } from "@/components/Loaders";
 import { storeMoodScaleReturnUrl } from "@/lib/moodscaleUrl";
-import { cacheUserSession } from "@/lib/userSession";
+import { cacheUserSession, clearUserSessionCache } from "@/lib/userSession";
 
 export default function SsoPage() {
   const router = useRouter();
@@ -29,6 +29,7 @@ export default function SsoPage() {
           setError(res.error || "SSO failed");
           return;
         }
+        clearUserSessionCache();
         localStorage.setItem("token", res.token);
         if (res.user) {
           cacheUserSession({

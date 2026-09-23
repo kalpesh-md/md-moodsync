@@ -19,18 +19,20 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-/** User id for Spotify OAuth `state` (must match callback handler). */
+/** User id for Spotify OAuth `state` — JWT is authoritative (cache can be stale). */
 export function getSessionUserId(): string | null {
+  const token = localStorage.getItem("token");
+  if (token) {
+    const payload = decodeJwtPayload(token);
+    const id = payload?.userId ?? payload?.sub;
+    if (id) return String(id);
+  }
+
   const cached = readCachedUserSession();
   if (cached?.user_id) return String(cached.user_id);
   if (cached?.id) return String(cached.id);
 
-  const token = localStorage.getItem("token");
-  if (!token) return null;
-
-  const payload = decodeJwtPayload(token);
-  const id = payload?.userId ?? payload?.sub;
-  return id ? String(id) : null;
+  return null;
 }
 
 export function getSpotifyRedirectUri(): string {
@@ -57,11 +59,9 @@ export function buildSpotifyAuthUrl(options?: { switchAccount?: boolean }): stri
     redirect_uri: getSpotifyRedirectUri(),
     scope: SPOTIFY_SCOPES,
     state: userId,
+    // Always show Spotify login / account picker so each MoodSync user links their own account.
+    show_dialog: "true",
   });
-
-  if (options?.switchAccount) {
-    params.set("show_dialog", "true");
-  }
 
   return `https://accounts.spotify.com/authorize?${params.toString()}`;
 }

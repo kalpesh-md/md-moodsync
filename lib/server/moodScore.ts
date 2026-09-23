@@ -39,10 +39,12 @@ export function computeMoodScore({
   moodLabel,
   trackPopularity,
   steps,
+  sleepHours,
 }: {
   moodLabel: string | null;
   trackPopularity: number | null;
   steps: number;
+  sleepHours?: number | null;
 }): number {
   const components: { value: number; weight: number }[] = [];
 
@@ -56,7 +58,15 @@ export function computeMoodScore({
   if (typeof steps === "number" && steps > 0) {
     components.push({
       value: Math.round(Math.min(steps / 10000, 1) * 100),
-      weight: 0.2,
+      weight: 0.15,
+    });
+  }
+  if (typeof sleepHours === "number" && sleepHours > 0) {
+    // 7–9 hours is optimal; short or very long sleep lowers the score.
+    const distanceFromIdeal = Math.min(Math.abs(sleepHours - 8) / 4, 1);
+    components.push({
+      value: Math.round((1 - distanceFromIdeal) * 100),
+      weight: 0.15,
     });
   }
 

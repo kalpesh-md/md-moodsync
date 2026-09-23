@@ -37,7 +37,7 @@ export const postMoodSync: RouteHandler = async (request) => {
 
   const now = Date.now();
   const startOfDay = new Date().setHours(0, 0, 0, 0);
-  let fitData = { steps: 0, heartRate: null as number | null, sleepHours: null as null };
+  let fitData = { steps: 0, heartRate: null as number | null, sleepHours: null as number | null };
 
   if (user.google_access_token) {
     fitData = await fetchGoogleFitData(user.google_access_token, startOfDay, now);
@@ -58,6 +58,7 @@ export const postMoodSync: RouteHandler = async (request) => {
     moodLabel: recentCheckin ? getCheckinMoods(recentCheckin) || null : null,
     trackPopularity: spotifyTrack?.popularity ?? null,
     steps: fitData.steps,
+    sleepHours: fitData.sleepHours,
   });
 
   const { data: lastSnapshots } = await db

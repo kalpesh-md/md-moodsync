@@ -124,7 +124,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       icon: Moon,
       label: "Sleep",
       value: syncData?.fitData?.sleepHours
-        ? `${syncData.fitData.sleepHours}h`
+        ? `${Number(syncData.fitData.sleepHours).toFixed(1)}h`
         : syncing
           ? "Fetching…"
           : "—",

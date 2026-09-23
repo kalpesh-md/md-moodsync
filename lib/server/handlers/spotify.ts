@@ -1,3 +1,5 @@
+import jwt from "jsonwebtoken";
+import { ensureMoodSyncProfile } from "@/lib/profile";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   getQueryParam,
@@ -8,10 +10,38 @@ import {
   getPublicOrigin,
   getSpotifyRedirectUri,
 } from "@/lib/server/origin";
-import {
-  ensureSpotifyAccessToken,
-  refreshSpotifyToken,
-} from "@/lib/server/spotify";
+
+function jwtSecret(): string | undefined {
+  return process.env.JWT_SECRET || process.env.MOODSYNC_SSO_SECRET;
+}
+
+function signSpotifyOAuthState(userId: string): string {
+  const secret = jwtSecret();
+  if (!secret) return userId;
+  return jwt.sign({ userId, purpose: "spotify_oauth" }, secret, {
+    expiresIn: "15m",
+  });
+}
+
+function resolveSpotifyOAuthUserId(state: string | null): string | null {
+  if (!state) return null;
+  const secret = jwtSecret();
+  if (secret) {
+    try {
+      const payload = jwt.verify(state, secret) as {
+        userId?: string;
+        purpose?: string;
+      };
+      if (payload.purpose === "spotify_oauth" && payload.userId) {
+        return String(payload.userId);
+      }
+    } catch {
+      /* fall through — legacy raw userId in state */
+    }
+  }
+  if (state.length >= 8 && state.length <= 128) return state;
+  return null;
+}
 
 export const getSpotifyAuthUrl: RouteHandler = async (request) => {
   const auth = await requireAuth(request);
@@ -38,11 +68,9 @@ export const getSpotifyAuthUrl: RouteHandler = async (request) => {
       response_type: "code",
       redirect_uri: redirectUri,
       scope: scopes,
-      state: auth.user.userId,
+      state: signSpotifyOAuthState(auth.user.userId),
+      show_dialog: "true",
     });
-    if (getQueryParam(request, "switch") === "1") {
-      params.set("show_dialog", "true");
-    }
 
     const url = `https://accounts.spotify.com/authorize?${params.toString()}`;
     return Response.json({ url, redirect_uri: redirectUri });
@@ -72,7 +100,7 @@ export const postSpotifyDisconnect: RouteHandler = async (request) => {
 
 export const getSpotifyCallback: RouteHandler = async (request) => {
   const code = getQueryParam(request, "code");
-  const userId = getQueryParam(request, "state");
+  const userId = resolveSpotifyOAuthUserId(getQueryParam(request, "state"));
   const db = getSupabaseAdmin();
   const redirectUri = getSpotifyRedirectUri(request);
   const clientOrigin = getPublicOrigin(request);
@@ -80,6 +108,8 @@ export const getSpotifyCallback: RouteHandler = async (request) => {
   if (!code || !userId) {
     return Response.redirect(`${clientOrigin}/?error=spotify`, 302);
   }
+
+  await ensureMoodSyncProfile(userId, null);
 
   const response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",

@@ -43,16 +43,22 @@ async function getSpotifyAuthUrlFromServer(options?: {
 export async function getSpotifyAuthUrl(options?: {
   switchAccount?: boolean;
 }): Promise<{ url: string }> {
-  if (canBuildSpotifyAuthUrlLocally()) {
-    return { url: buildSpotifyAuthUrl(options) };
+  try {
+    return await getSpotifyAuthUrlFromServer(options);
+  } catch (err) {
+    if (canBuildSpotifyAuthUrlLocally()) {
+      return { url: buildSpotifyAuthUrl(options) };
+    }
+    throw err;
   }
-  return getSpotifyAuthUrlFromServer(options);
 }
 
 export async function connectSpotify(options?: {
   switchAccount?: boolean;
 }): Promise<void> {
-  const { url } = await getSpotifyAuthUrl(options);
+  const { url } = await getSpotifyAuthUrl({
+    switchAccount: options?.switchAccount ?? true,
+  });
   window.location.href = url;
 }
 

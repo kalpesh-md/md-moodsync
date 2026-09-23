@@ -15,7 +15,7 @@ import { QueryProvider } from "@/components/query-provider";
 import { createCheckin } from "@/lib/api/checkins";
 import type { Checkin } from "@/lib/api/checkins";
 import { BrandLoader } from "@/components/Loaders";
-import type { IntegrationStatus } from "@/lib/api/integrations";
+import { getIntegrationStatus } from "@/lib/api/integrations";
 import { markPostOAuthReturn } from "@/lib/api/sessionFlags";
 import {
   useCheckins,
@@ -182,34 +182,58 @@ function MoodSyncShell() {
     if (connected === "spotify") {
       shownConnectNotice.current = true;
       markPostOAuthReturn();
-      queryClient.setQueryData<IntegrationStatus>(queryKeys.integrations, (current) => ({
-        spotify: { connected: true },
-        googleFit: current?.googleFit ?? { connected: false },
-      }));
-      window.setTimeout(() => {
-        void queryClient.refetchQueries({ queryKey: queryKeys.moodSync });
-      }, 1500);
-      notice.success(
-        "Spotify connected",
-        "Your listening will now feed into your mood score.",
-      );
       window.history.replaceState({}, "", "/");
+      void (async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+        try {
+          const status = await getIntegrationStatus();
+          if (status.spotify.connected) {
+            notice.success(
+              "Spotify connected",
+              "Your listening will now feed into your mood score.",
+            );
+          } else {
+            notice.error(
+              "Spotify connect incomplete",
+              "Please try again and sign in with your own Spotify account.",
+            );
+          }
+        } catch {
+          notice.error(
+            "Spotify connect incomplete",
+            "Could not verify Spotify — please try connecting again.",
+          );
+        }
+      })();
     }
     if (connected === "googlefit") {
       shownConnectNotice.current = true;
       markPostOAuthReturn();
-      queryClient.setQueryData<IntegrationStatus>(queryKeys.integrations, (current) => ({
-        spotify: current?.spotify ?? { connected: false },
-        googleFit: { connected: true },
-      }));
-      window.setTimeout(() => {
-        void queryClient.refetchQueries({ queryKey: queryKeys.moodSync });
-      }, 1500);
-      notice.success(
-        "Google Fit connected",
-        "Sleep and steps will now sync into your snapshot.",
-      );
       window.history.replaceState({}, "", "/");
+      void (async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moodSync });
+        try {
+          const status = await getIntegrationStatus();
+          if (status.googleFit.connected) {
+            notice.success(
+              "Google Fit connected",
+              "Sleep and steps will now sync into your snapshot.",
+            );
+          } else {
+            notice.error(
+              "Google Fit connect incomplete",
+              "Please try connecting again.",
+            );
+          }
+        } catch {
+          notice.error(
+            "Google Fit connect incomplete",
+            "Could not verify Google Fit — please try again.",
+          );
+        }
+      })();
     }
   }, [notice, queryClient]);
 
