@@ -106,7 +106,11 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         : syncing
           ? "Fetching…"
           : "—",
-      detail: syncData?.fitData?.heartRate ? "Latest reading" : fitConnected ? "No reading yet" : "Connect Google Fit",
+      detail: syncData?.fitData?.heartRate
+        ? "Latest reading"
+        : fitConnected
+          ? "Needs watch or HR sensor in Google Fit"
+          : "Connect Google Fit",
       action: !fitConnected ? connectGoogleFit : undefined,
       actionLabel: "Connect Fit",
     },
@@ -128,7 +132,11 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         : syncing
           ? "Fetching…"
           : "—",
-      detail: syncData?.fitData?.sleepHours ? "Last night" : fitConnected ? "No sleep data yet" : "Connect Google Fit",
+      detail: syncData?.fitData?.sleepHours
+        ? "Last night"
+        : fitConnected
+          ? "Log sleep in Google Fit or use sleep tracking"
+          : "Connect Google Fit",
     },
   ];
 
