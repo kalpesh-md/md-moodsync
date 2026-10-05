@@ -1,6 +1,10 @@
 import { getCheckinMoods } from "@/lib/checkinMoods";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { ensureGoogleAccessToken, fetchGoogleFitData } from "@/lib/server/googleFit";
+import {
+  ensureGoogleAccessToken,
+  fetchGoogleFitData,
+  type GoogleFitData,
+} from "@/lib/server/googleFit";
 import { requireAuth, type RouteHandler } from "@/lib/server/http";
 import { computeMoodScore } from "@/lib/server/moodScore";
 import { getSpotifyPlaybackForUser } from "@/lib/server/spotify";
@@ -38,7 +42,7 @@ export const postMoodSync: RouteHandler = async (request) => {
 
   const now = Date.now();
   const startOfDay = new Date().setHours(0, 0, 0, 0);
-  let fitData = { steps: 0, heartRate: null as number | null, sleepHours: null as number | null };
+  let fitData: GoogleFitData = { steps: 0, heartRate: null, sleepHours: null };
 
   if (user.google_access_token || user.google_refresh_token) {
     const google = await ensureGoogleAccessToken(userId, user);
