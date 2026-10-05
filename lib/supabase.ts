@@ -1,4 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  getSupabaseAnonKey,
+  getSupabaseServiceKey,
+  getSupabaseUrl,
+} from "@/lib/supabase/env";
 
 let adminClient: SupabaseClient | null = null;
 
@@ -6,14 +11,12 @@ let adminClient: SupabaseClient | null = null;
 export function getSupabaseAdmin(): SupabaseClient {
   if (adminClient) return adminClient;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+  const url = getSupabaseUrl();
+  const key = getSupabaseServiceKey();
 
   if (!url || !key) {
     throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required",
+      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY are required",
     );
   }
 
@@ -29,11 +32,11 @@ export function getSupabaseAdmin(): SupabaseClient {
 
 /** Verify a Supabase user access token; returns user or null. */
 export async function getUserFromAccessToken(accessToken: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return null;
+  const url = getSupabaseUrl();
+  const publishableKey = getSupabaseAnonKey();
+  if (!url || !publishableKey) return null;
 
-  const client = createClient(url, anon, {
+  const client = createClient(url, publishableKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
