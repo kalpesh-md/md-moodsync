@@ -1,6 +1,6 @@
 import { getCheckinMoods } from "@/lib/checkinMoods";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { fetchGoogleFitData } from "@/lib/server/googleFit";
+import { ensureGoogleAccessToken, fetchGoogleFitData } from "@/lib/server/googleFit";
 import { requireAuth, type RouteHandler } from "@/lib/server/http";
 import { computeMoodScore } from "@/lib/server/moodScore";
 import { getSpotifyPlaybackForUser } from "@/lib/server/spotify";
@@ -24,6 +24,7 @@ export const postMoodSync: RouteHandler = async (request) => {
 
   let spotifyTrack = null;
   let spotifyNeedsReconnect = false;
+  let googleNeedsReconnect = false;
   if (user.spotify_access_token || user.spotify_refresh_token) {
     try {
       const playback = await getSpotifyPlaybackForUser(userId, user);
@@ -39,8 +40,13 @@ export const postMoodSync: RouteHandler = async (request) => {
   const startOfDay = new Date().setHours(0, 0, 0, 0);
   let fitData = { steps: 0, heartRate: null as number | null, sleepHours: null as number | null };
 
-  if (user.google_access_token) {
-    fitData = await fetchGoogleFitData(user.google_access_token, startOfDay, now);
+  if (user.google_access_token || user.google_refresh_token) {
+    const google = await ensureGoogleAccessToken(userId, user);
+    googleNeedsReconnect = google.needsReconnect;
+    if (google.token) {
+      fitData = await fetchGoogleFitData(google.token, startOfDay, now);
+      if (fitData.authFailed) googleNeedsReconnect = true;
+    }
   }
 
   const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
@@ -117,8 +123,9 @@ export const postMoodSync: RouteHandler = async (request) => {
     moodScore,
     integrations: {
       spotify: Boolean(user.spotify_access_token || user.spotify_refresh_token),
-      googleFit: Boolean(user.google_access_token),
+      googleFit: Boolean(user.google_access_token || user.google_refresh_token),
       spotifyNeedsReconnect,
+      googleNeedsReconnect,
     },
     track: {
       name: trackName,
@@ -126,7 +133,11 @@ export const postMoodSync: RouteHandler = async (request) => {
       albumArt,
       isRecent,
     },
-    fitData,
+    fitData: {
+      steps: fitData.steps,
+      heartRate: fitData.heartRate,
+      sleepHours: fitData.sleepHours,
+    },
   });
 };
 

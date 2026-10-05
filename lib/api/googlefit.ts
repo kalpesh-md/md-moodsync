@@ -17,7 +17,7 @@ export async function disconnectGoogleFit(): Promise<void> {
     method: "POST",
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
-  if (!res.ok) throw new Error("Failed to disconnect Google Fit");
+  if (!res.ok) throw new Error("Failed to disconnect Google Health");
 }
 
 export async function switchGoogleFitAccount(): Promise<void> {

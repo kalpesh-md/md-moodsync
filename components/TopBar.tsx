@@ -108,9 +108,9 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
       await disconnectGoogleFit();
       refreshIntegrationState();
       setFitMenuOpen(false);
-      notice.success("Google Fit disconnected", "You can connect a different account anytime.");
+      notice.success("Google Health disconnected", "You can connect a different account anytime.");
     } catch {
-      notice.error("Couldn't disconnect Google Fit", "Please try again.");
+      notice.error("Couldn't disconnect Google Health", "Please try again.");
     } finally {
       setFitBusy(false);
     }
@@ -121,7 +121,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
     try {
       await switchGoogleFitAccount();
     } catch {
-      notice.error("Couldn't switch Google Fit account", "Please try again.");
+      notice.error("Couldn't switch Google Health account", "Please try again.");
       setFitBusy(false);
     }
   };
@@ -132,7 +132,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
       await connectGoogleFit();
     } catch (err) {
       notice.error(
-        "Couldn't connect Google Fit",
+        "Couldn't connect Google Health",
         err instanceof Error ? err.message : "Please try again in a moment.",
       );
       setFitBusy(false);
@@ -288,8 +288,8 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
                   icon={<Check className="h-3 w-3" />}
                   className="cursor-pointer pr-1.5"
                 >
-                  <span className="hidden sm:inline">Fit</span>
-                  <span className="sm:hidden">Fit</span>
+                  <span className="hidden sm:inline">Health</span>
+                  <span className="sm:hidden">Health</span>
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </MsPill>
               </button>
@@ -297,7 +297,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
                 <>
                   <button
                     type="button"
-                    aria-label="Close Google Fit menu"
+                    aria-label="Close Google Health menu"
                     className="fixed inset-0 z-40"
                     onClick={() => setFitMenuOpen(false)}
                   />
@@ -335,7 +335,7 @@ export default function TopBar({ onCheckIn }: TopBarProps) {
               disabled={fitBusy}
               onClick={() => void handleFitConnect()}
             >
-              <span className="hidden sm:inline">Fit</span>
+              <span className="hidden sm:inline">Health</span>
             </MsButton>
           )}
         </div>

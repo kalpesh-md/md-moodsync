@@ -42,6 +42,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
   const spotifyConnected = syncData?.integrations?.spotify ?? false;
   const spotifyNeedsReconnect = Boolean(syncData?.integrations?.spotifyNeedsReconnect);
   const fitConnected = syncData?.integrations?.googleFit ?? false;
+  const fitNeedsReconnect = Boolean(syncData?.integrations?.googleNeedsReconnect);
   const syncing = isFetching;
   const showSkeleton = isPending && !syncData;
 
@@ -108,11 +109,13 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           : "—",
       detail: syncData?.fitData?.heartRate
         ? "Latest reading"
-        : fitConnected
-          ? "Needs watch or HR sensor in Google Fit"
-          : "Connect Google Fit",
-      action: !fitConnected ? connectGoogleFit : undefined,
-      actionLabel: "Connect Fit",
+        : fitNeedsReconnect
+          ? "Reconnect to allow Google Health"
+          : fitConnected
+            ? "Needs a Fitbit, Pixel Watch, or a reading in the Google Health app"
+            : "Connect Google Health",
+      action: !fitConnected || fitNeedsReconnect ? connectGoogleFit : undefined,
+      actionLabel: fitNeedsReconnect ? "Reconnect" : "Connect Health",
     },
     {
       icon: Footprints,
@@ -122,7 +125,13 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         : syncing
           ? "Fetching…"
           : "—",
-      detail: syncData?.fitData?.steps ? "Today" : fitConnected ? "No steps yet" : "Connect Google Fit",
+      detail: syncData?.fitData?.steps
+        ? "Today"
+        : fitNeedsReconnect
+          ? "Reconnect to allow Google Health"
+          : fitConnected
+            ? "Turn on MobileTrack in the Google Health app, then Sync"
+            : "Connect Google Health",
     },
     {
       icon: Moon,
@@ -134,9 +143,11 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
           : "—",
       detail: syncData?.fitData?.sleepHours
         ? "Last night"
-        : fitConnected
-          ? "Log sleep in Google Fit or use sleep tracking"
-          : "Connect Google Fit",
+        : fitNeedsReconnect
+          ? "Reconnect to allow Google Health"
+          : fitConnected
+            ? "Log sleep in the Google Health app, or wear a Fitbit or Pixel Watch"
+            : "Connect Google Health",
     },
   ];
 
@@ -160,7 +171,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       <PageHeader
         eyebrow="Today"
         title="Your mood right now"
-        subtitle="Live mood from check-ins, Spotify, and Google Fit"
+        subtitle="Live mood from check-ins, Spotify, and Google Health"
         icon={<Sparkles className="h-5 w-5" />}
         actions={
           <>
@@ -226,7 +237,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       </div>
 
       <div className="space-y-3">
-        <SectionHeading title="Health signals" meta="Synced from Spotify & Google Fit" />
+        <SectionHeading title="Health signals" meta="Synced from Spotify & Google Health" />
         <div className="grid gap-3 sm:grid-cols-2">
           {signals.map((s) => (
             <MetricTile key={s.label} {...s} />

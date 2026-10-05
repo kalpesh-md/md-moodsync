@@ -218,19 +218,19 @@ function MoodSyncShell() {
           const status = await getIntegrationStatus();
           if (status.googleFit.connected) {
             notice.success(
-              "Google Fit connected",
+              "Google Health connected",
               "Sleep and steps will now sync into your snapshot.",
             );
           } else {
             notice.error(
-              "Google Fit connect incomplete",
+              "Google Health connect incomplete",
               "Please try connecting again.",
             );
           }
         } catch {
           notice.error(
-            "Google Fit connect incomplete",
-            "Could not verify Google Fit — please try again.",
+            "Google Health connect incomplete",
+            "Could not verify Google Health — please try again.",
           );
         }
       })();

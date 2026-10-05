@@ -8,6 +8,7 @@ export interface MoodSyncData {
     spotify: boolean;
     googleFit: boolean;
     spotifyNeedsReconnect?: boolean;
+    googleNeedsReconnect?: boolean;
   };
   track?: {
     name: string | null;

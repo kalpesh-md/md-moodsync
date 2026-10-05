@@ -7,9 +7,9 @@ export const getFitAuthUrl: RouteHandler = async (request) => {
   if (auth.response) return auth.response;
 
   const scopes = [
-    "https://www.googleapis.com/auth/fitness.activity.read",
-    "https://www.googleapis.com/auth/fitness.heart_rate.read",
-    "https://www.googleapis.com/auth/fitness.sleep.read",
+    "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+    "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+    "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
   ].join(" ");
 
   const redirectUri = getGoogleRedirectUri(request);

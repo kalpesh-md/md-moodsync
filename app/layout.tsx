@@ -11,7 +11,7 @@ const geist = Geist({
 export const metadata: Metadata = {
   title: "MoodSync",
   description:
-    "Mood tracking with Spotify, Google Fit, forecasts, and recommendations",
+    "Mood tracking with Spotify, Google Health, forecasts, and recommendations",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
