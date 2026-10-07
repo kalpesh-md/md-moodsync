@@ -112,7 +112,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         : fitNeedsReconnect
           ? "Reconnect to allow Google Health"
           : fitConnected
-            ? "Needs a Fitbit, Pixel Watch, or a reading in the Google Health app"
+            ? "Shows when Google has a heart-rate reading stored for your account"
             : "Connect Google Health",
       action: !fitConnected || fitNeedsReconnect ? connectGoogleFit : undefined,
       actionLabel: fitNeedsReconnect ? "Reconnect" : "Connect Health",
@@ -130,7 +130,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         : fitNeedsReconnect
           ? "Reconnect to allow Google Health"
           : fitConnected
-            ? "Turn on MobileTrack in the Google Health app, then Sync"
+            ? "Shows when Google has a step total for today on your account"
             : "Connect Google Health",
     },
     {
@@ -146,7 +146,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
         : fitNeedsReconnect
           ? "Reconnect to allow Google Health"
           : fitConnected
-            ? "Log sleep in the Google Health app, or wear a Fitbit or Pixel Watch"
+            ? "Shows when Google has last night’s sleep stored for your account"
             : "Connect Google Health",
     },
   ];
@@ -237,7 +237,7 @@ export default function TodayScreen({ checkins, latest }: TodayScreenProps) {
       </div>
 
       <div className="space-y-3">
-        <SectionHeading title="Health signals" meta="Synced from Spotify & Google Health" />
+        <SectionHeading title="Health signals" meta="Only on your account" />
         <div className="grid gap-3 sm:grid-cols-2">
           {signals.map((s) => (
             <MetricTile key={s.label} {...s} />
