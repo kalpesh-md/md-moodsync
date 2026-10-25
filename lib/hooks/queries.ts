@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCheckins, getLatestCheckin } from "@/lib/api/checkins";
 import { getMe } from "@/lib/api/user";
@@ -91,22 +91,6 @@ export function useMoodSync(enabled = true) {
     refetchOnWindowFocus: false,
     refetchOnMount: true,
   });
-}
-
-/** Delay mood sync so lightweight routes (me, friends) load first. */
-export function useDeferredMoodSync(enabled = true, delayMs = 4000) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (!enabled) {
-      setReady(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setReady(true), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [enabled, delayMs]);
-
-  return useMoodSync(enabled && ready);
 }
 
 export function useRecs(enabled = true) {
